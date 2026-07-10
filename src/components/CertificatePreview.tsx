@@ -196,9 +196,12 @@ export default function CertificatePreview({ participant, config, showBackPage =
       padding: ultraDenseLayout ? '4px 7px' : denseLayout ? '5px 8px' : '8px',
       fontSize: ultraDenseLayout ? '9.5px' : denseLayout ? '10.5px' : '12px',
       lineHeight: ultraDenseLayout ? '1.12' : '1.2',
+      verticalAlign: 'middle' as const,
     };
     const headerCellStyle = {
       padding: ultraDenseLayout ? '5px 7px' : denseLayout ? '6px 8px' : '10px',
+      lineHeight: '1.2',
+      verticalAlign: 'middle' as const,
     };
     return (
       <div 
@@ -260,20 +263,20 @@ export default function CertificatePreview({ participant, config, showBackPage =
           <table className="w-full text-left border-collapse border border-slate-300 rounded-lg overflow-hidden shadow-sm table-fixed">
             <thead>
               <tr className="bg-emerald-800 text-white font-sans uppercase tracking-wider text-[11px]">
-                <th style={headerCellStyle} className="border border-slate-300 text-center w-10">No</th>
-                <th style={headerCellStyle} className="border border-slate-300">Materi Pokok / Sub-Materi</th>
-                <th style={headerCellStyle} className="border border-slate-300 w-[125px] text-center">Jam Pelajaran (JP)</th>
-                <th style={headerCellStyle} className="border border-slate-300 w-[230px]">Narasumber / Instruktur</th>
+                <th style={headerCellStyle} className="border border-slate-300 align-middle text-center w-10">No</th>
+                <th style={headerCellStyle} className="border border-slate-300 align-middle text-left">Materi Pokok / Sub-Materi</th>
+                <th style={headerCellStyle} className="border border-slate-300 align-middle w-[125px] text-center">Jam Pelajaran (JP)</th>
+                <th style={headerCellStyle} className="border border-slate-300 align-middle w-[230px] text-left">Narasumber / Instruktur</th>
               </tr>
             </thead>
             <tbody>
               {config.materi.length > 0 ? (
                 config.materi.map((item, index) => (
                   <tr key={item.id} style={{ backgroundColor: index % 2 === 0 ? 'rgba(248, 250, 252, 0.75)' : '#ffffff' }}>
-                    <td style={rowStyle} className="border border-slate-300 text-center font-mono">{index + 1}</td>
-                    <td style={rowStyle} className="border border-slate-300 font-medium text-slate-800 break-words">{item.title}</td>
-                    <td style={rowStyle} className="border border-slate-300 text-center font-mono">{item.hours} JP</td>
-                    <td style={rowStyle} className="border border-slate-300 text-slate-600 font-medium break-words">{item.instructor || '-'}</td>
+                    <td style={rowStyle} className="border border-slate-300 align-middle text-center font-mono">{index + 1}</td>
+                    <td style={rowStyle} className="border border-slate-300 align-middle text-left font-medium text-slate-800 break-words">{item.title}</td>
+                    <td style={rowStyle} className="border border-slate-300 align-middle text-center font-mono whitespace-nowrap">{item.hours} JP</td>
+                    <td style={rowStyle} className="border border-slate-300 align-middle text-left text-slate-600 font-medium break-words">{item.instructor || '-'}</td>
                   </tr>
                 ))
               ) : (
@@ -285,13 +288,13 @@ export default function CertificatePreview({ participant, config, showBackPage =
               )}
               {/* Total Jam Pelajaran Row */}
               <tr className="font-bold text-emerald-950" style={{ backgroundColor: 'rgba(236, 253, 245, 0.7)' }}>
-                <td colSpan={2} style={headerCellStyle} className="border border-slate-300 text-right uppercase tracking-wider text-[10px]">
+                <td colSpan={2} style={headerCellStyle} className="border border-slate-300 align-middle text-right uppercase tracking-wider text-[10px]">
                   Total Alokasi Jam Pelajaran
                 </td>
-                <td style={headerCellStyle} className="border border-slate-300 text-center font-mono text-[11px]">
+                <td style={headerCellStyle} className="border border-slate-300 align-middle text-center font-mono text-[11px]">
                   {totalJP} JP
                 </td>
-                <td style={headerCellStyle} className="border border-slate-300 bg-white"></td>
+                <td style={headerCellStyle} className="border border-slate-300 align-middle bg-white"></td>
               </tr>
             </tbody>
           </table>
