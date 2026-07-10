@@ -1,0 +1,8 @@
+{
+  "name": "Sertifikat Ansor Tasikmalaya",
+  "description": "Aplikasi generator sertifikat otomatis GP Ansor Kabupaten Tasikmalaya dengan integrasi Google Sheets, materi dua halaman, tanda tangan digital, dan verifikasi QR code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
