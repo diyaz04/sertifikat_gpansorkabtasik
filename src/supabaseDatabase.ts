@@ -34,8 +34,14 @@ export const getAuthSession = async () => {
 };
 
 export const signInWithPassword = async (email: string, password: string) => {
-  const { data, error } = await requireClient().auth.signInWithPassword({ email, password });
+  const client = requireClient();
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  const { data: isAdmin, error: adminError } = await client.rpc('is_admin');
+  if (adminError || !isAdmin) {
+    await client.auth.signOut();
+    throw new Error('Akun ini tidak terdaftar sebagai administrator.');
+  }
   return data.session;
 };
 

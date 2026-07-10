@@ -894,6 +894,10 @@ export default function App() {
 
   // Add / Edit materials (Materi)
   const addMateriRow = () => {
+    if (activeKegiatan.materi.length >= 14) {
+      triggerNotification('error', 'Maksimal 14 materi agar seluruh daftar tetap muat pada halaman 2 sertifikat.');
+      return;
+    }
     const newItem: MateriItem = {
       id: `mat_${Date.now()}`,
       title: 'Materi Pokok Baru',

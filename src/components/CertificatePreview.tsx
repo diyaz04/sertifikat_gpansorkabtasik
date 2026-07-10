@@ -4,6 +4,7 @@ import { Participant, CertificateConfig } from '../types';
 import { formatIndonesianDate } from '../utils';
 import { Award } from 'lucide-react';
 import templatePkdUrl from '../assets/template-pkd.jpg';
+import ansorLogoUrl from '../assets/logo-ansor.png';
 
 interface CertificatePreviewProps {
   participant: Participant;
@@ -12,38 +13,14 @@ interface CertificatePreviewProps {
   exportMode?: boolean;
 }
 
-// Beautiful GP Ansor SVG Emblem Vector for highly professional aesthetic
 export function AnsorLogoSvg({ className = 'w-16 h-16' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Outer Golden Star Background (9 Rays / Stars representation) */}
-      <circle cx="100" cy="100" r="90" fill="#045a27" stroke="#e0a927" strokeWidth="4" />
-      <circle cx="100" cy="100" r="82" fill="none" stroke="#e0a927" strokeWidth="1" strokeDasharray="4 2" />
-      
-      {/* 9 Stars representation in arch */}
-      <g fill="#e0a927">
-        <path d="M100 25l3 6h6l-5 4 2 6-6-4-6 4 2-6-5-4h6z" /> {/* Top Star (Paling Besar) */}
-        <path d="M130 35l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M70 35l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M152 55l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M48 55l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M165 82l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M35 82l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M162 112l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-        <path d="M38 112l2 4h4l-3 3 1 4-4-3-4 3 1-4-3-3h4z" />
-      </g>
-
-      {/* Crescent Moon */}
-      <path d="M135 125c-15 25-45 30-70 15s-30-45-15-70c5-8 12-14 20-18-12 10-16 28-9 43 7 15 23 23 40 20 12-2 23-10 28-20 2 10 0 21-6 30z" fill="#e0a927" />
-      
-      {/* Central Shield representation with GP Ansor logo concepts */}
-      <rect x="75" y="75" width="50" height="50" rx="6" fill="#034d21" stroke="#e0a927" strokeWidth="2" />
-      <text x="100" y="105" fill="#e0a927" fontSize="11" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" letterSpacing="1">ANSOR</text>
-      
-      {/* Decorative Golden Ribbon */}
-      <path d="M50 145s20-10 50-10 50 10 50 10v10s-20-10-50-10-50 10-50 10z" fill="#e0a927" />
-      <text x="100" y="152" fill="#045a27" fontSize="7" fontWeight="black" fontFamily="sans-serif" textAnchor="middle">TASIKMALAYA</text>
-    </svg>
+    <img
+      src={ansorLogoUrl}
+      alt="Logo Gerakan Pemuda Ansor"
+      className={`${className} object-contain`}
+      draggable={false}
+    />
   );
 }
 
@@ -212,10 +189,21 @@ export default function CertificatePreview({ participant, config, showBackPage =
 
   // Render Page 2 (Back Side of Certificate: Syllabus/Materi)
   const renderBackPage = () => {
+    const materialCount = config.materi.length;
+    const denseLayout = materialCount > 9;
+    const ultraDenseLayout = materialCount > 12;
+    const rowStyle = {
+      padding: ultraDenseLayout ? '4px 7px' : denseLayout ? '5px 8px' : '8px',
+      fontSize: ultraDenseLayout ? '9.5px' : denseLayout ? '10.5px' : '12px',
+      lineHeight: ultraDenseLayout ? '1.12' : '1.2',
+    };
+    const headerCellStyle = {
+      padding: ultraDenseLayout ? '5px 7px' : denseLayout ? '6px 8px' : '10px',
+    };
     return (
       <div 
         id={`certificate-back-${participant.id}`}
-        className="relative bg-white text-slate-800 w-[1123px] h-[794px] overflow-hidden select-none flex flex-col justify-between p-[50px] shadow-2xl border-[16px] border-emerald-950"
+        className="relative bg-white text-slate-800 w-[1123px] h-[794px] overflow-hidden select-none flex flex-col p-[38px] shadow-2xl border-[16px] border-emerald-950"
         style={{ 
           fontFamily: "'Inter', sans-serif",
           boxSizing: 'border-box'
@@ -230,21 +218,21 @@ export default function CertificatePreview({ participant, config, showBackPage =
         <div className="absolute inset-4 border pointer-events-none rounded-md" style={{ borderColor: 'rgba(6, 95, 70, 0.2)' }} />
 
         {/* HEADER */}
-        <div className="flex flex-col items-center text-center mt-2">
-          <h2 className="text-[18px] font-bold text-emerald-900 tracking-wide font-sans uppercase">
+        <div className={`flex flex-col items-center text-center ${denseLayout ? 'mt-0' : 'mt-1'}`}>
+          <h2 className={`${denseLayout ? 'text-[15px]' : 'text-[18px]'} font-bold text-emerald-900 tracking-wide font-sans uppercase`}>
             DAFTAR MATERI PELATIHAN / KURIKULUM
           </h2>
-          <h3 className="text-[13px] font-semibold text-slate-600 tracking-wide uppercase mt-1">
+          <h3 className={`${denseLayout ? 'text-[10px] mt-0.5' : 'text-[13px] mt-1'} font-semibold text-slate-600 tracking-wide uppercase`}>
             {config.eventName || 'Pelatihan Kepemimpinan Dasar (PKD)'} {config.subEventName ? `(${config.subEventName})` : ''}
           </h3>
-          <div className="w-[50%] h-[2px] bg-gradient-to-r from-transparent via-amber-500 to-transparent my-1" />
+          <div className={`w-[50%] h-[2px] bg-gradient-to-r from-transparent via-amber-500 to-transparent ${denseLayout ? 'my-0.5' : 'my-1'}`} />
         </div>
 
         {/* TABLE OF MATERI */}
-        <div className="flex-1 flex flex-col justify-start my-2 px-12 overflow-hidden">
+        <div className={`flex-1 flex flex-col justify-start px-8 overflow-hidden ${denseLayout ? 'my-1' : 'my-2'}`}>
           {/* BIODATA PESERTA */}
-          <div className="border rounded-xl p-3.5 mb-3 grid grid-cols-2 gap-4 text-xs text-slate-800" style={{ backgroundColor: 'rgba(236, 253, 245, 0.4)', borderColor: 'rgba(209, 250, 229, 0.6)' }}>
-            <div className="space-y-1.5">
+          <div className={`border rounded-xl grid grid-cols-2 text-slate-800 ${denseLayout ? 'p-2 mb-1.5 gap-3 text-[9.5px]' : 'p-3 mb-3 gap-4 text-xs'}`} style={{ backgroundColor: 'rgba(236, 253, 245, 0.4)', borderColor: 'rgba(209, 250, 229, 0.6)' }}>
+            <div className={denseLayout ? 'space-y-0.5' : 'space-y-1.5'}>
               <div className="flex">
                 <span className="font-bold text-slate-500 w-28 shrink-0">Nama Lengkap</span>
                 <span className="font-bold text-emerald-950">: {participant.name || '-'}</span>
@@ -254,7 +242,7 @@ export default function CertificatePreview({ participant, config, showBackPage =
                 <span className="font-semibold text-slate-800">: {participant.institution || '-'}</span>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className={denseLayout ? 'space-y-0.5' : 'space-y-1.5'}>
               <div className="flex">
                 <span className="font-bold text-slate-500 w-36 shrink-0">Tempat, Tanggal Lahir</span>
                 <span className="font-semibold text-slate-800">
@@ -269,23 +257,23 @@ export default function CertificatePreview({ participant, config, showBackPage =
             </div>
           </div>
 
-          <table className="w-full text-left border-collapse border border-slate-300 text-[12px] rounded-lg overflow-hidden shadow-sm">
+          <table className="w-full text-left border-collapse border border-slate-300 rounded-lg overflow-hidden shadow-sm table-fixed">
             <thead>
               <tr className="bg-emerald-800 text-white font-sans uppercase tracking-wider text-[11px]">
-                <th className="border border-slate-300 p-2.5 text-center w-12">No</th>
-                <th className="border border-slate-300 p-2.5">Materi Pokok / Sub-Materi</th>
-                <th className="border border-slate-300 p-2.5 w-[140px] text-center">Jam Pelajaran (JP)</th>
-                <th className="border border-slate-300 p-2.5 w-[250px]">Narasumber / Instruktur</th>
+                <th style={headerCellStyle} className="border border-slate-300 text-center w-10">No</th>
+                <th style={headerCellStyle} className="border border-slate-300">Materi Pokok / Sub-Materi</th>
+                <th style={headerCellStyle} className="border border-slate-300 w-[125px] text-center">Jam Pelajaran (JP)</th>
+                <th style={headerCellStyle} className="border border-slate-300 w-[230px]">Narasumber / Instruktur</th>
               </tr>
             </thead>
             <tbody>
               {config.materi.length > 0 ? (
                 config.materi.map((item, index) => (
                   <tr key={item.id} style={{ backgroundColor: index % 2 === 0 ? 'rgba(248, 250, 252, 0.75)' : '#ffffff' }}>
-                    <td className="border border-slate-300 p-2 text-center font-mono">{index + 1}</td>
-                    <td className="border border-slate-300 p-2 font-medium text-slate-800">{item.title}</td>
-                    <td className="border border-slate-300 p-2 text-center font-mono">{item.hours} JP</td>
-                    <td className="border border-slate-300 p-2 text-slate-600 font-medium">{item.instructor || '-'}</td>
+                    <td style={rowStyle} className="border border-slate-300 text-center font-mono">{index + 1}</td>
+                    <td style={rowStyle} className="border border-slate-300 font-medium text-slate-800 break-words">{item.title}</td>
+                    <td style={rowStyle} className="border border-slate-300 text-center font-mono">{item.hours} JP</td>
+                    <td style={rowStyle} className="border border-slate-300 text-slate-600 font-medium break-words">{item.instructor || '-'}</td>
                   </tr>
                 ))
               ) : (
@@ -297,32 +285,32 @@ export default function CertificatePreview({ participant, config, showBackPage =
               )}
               {/* Total Jam Pelajaran Row */}
               <tr className="font-bold text-emerald-950" style={{ backgroundColor: 'rgba(236, 253, 245, 0.7)' }}>
-                <td colSpan={2} className="border border-slate-300 p-2.5 text-right uppercase tracking-wider">
+                <td colSpan={2} style={headerCellStyle} className="border border-slate-300 text-right uppercase tracking-wider text-[10px]">
                   Total Alokasi Jam Pelajaran
                 </td>
-                <td className="border border-slate-300 p-2.5 text-center font-mono text-[14px]">
+                <td style={headerCellStyle} className="border border-slate-300 text-center font-mono text-[11px]">
                   {totalJP} JP
                 </td>
-                <td className="border border-slate-300 p-2.5 bg-white"></td>
+                <td style={headerCellStyle} className="border border-slate-300 bg-white"></td>
               </tr>
             </tbody>
           </table>
         </div>
 
         {/* BOTTOM SECTION FOR PAGE 2 */}
-        <div className="flex justify-between items-end px-12 mt-2">
+        <div className={`flex justify-between items-end px-8 shrink-0 ${denseLayout ? 'mt-1' : 'mt-2'}`}>
           {/* Validation confirmation statement */}
           <div className="text-left max-w-[430px]">
-            <p className="text-[10px] text-slate-500 font-medium italic leading-relaxed">
+            <p className={`${denseLayout ? 'text-[8px]' : 'text-[10px]'} text-slate-500 font-medium italic leading-relaxed`}>
               * Kurikulum ini disusun dan disahkan sesuai Standar Organisasi dan Administrasi Kaderisasi GP Ansor (PO GP Ansor).
             </p>
-            <div className="flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-emerald-800">
+            <div className={`flex items-center gap-1.5 ${denseLayout ? 'mt-1 text-[9px]' : 'mt-2 text-[11px]'} font-semibold text-emerald-800`}>
               <Award className="w-4 h-4 text-amber-500" />
               Sertifikat Terakreditasi Cabang Kabupaten Tasikmalaya
             </div>
             {certificateQrUrl && (
-              <div className="mt-3 flex items-center gap-2 text-slate-700">
-                <div className="h-[42px] w-[42px] bg-white p-[2px] border border-emerald-900">
+              <div className={`${denseLayout ? 'mt-1.5' : 'mt-3'} flex items-center gap-2 text-slate-700`}>
+                <div className={`${denseLayout ? 'h-[34px] w-[34px]' : 'h-[42px] w-[42px]'} bg-white p-[2px] border border-emerald-900`}>
                   <img src={certificateQrUrl} alt="QR verifikasi sertifikat" className="h-full w-full block" draggable={false} />
                 </div>
                 <p className="max-w-[330px] text-[8.5px] leading-snug">
@@ -340,9 +328,9 @@ export default function CertificatePreview({ participant, config, showBackPage =
             <p className="text-[10px] text-emerald-900 uppercase font-black tracking-wider leading-tight">
               TIM INSTRUKTUR CABANG
             </p>
-            <div className="flex h-[68px] items-center justify-center">
+            <div className={`flex ${denseLayout ? 'h-[48px]' : 'h-[68px]'} items-center justify-center`}>
               {signeeQrUrls[1] && (
-                <div className="h-[58px] w-[58px] bg-white p-[4px] border border-emerald-900 shadow-sm">
+                <div className={`${denseLayout ? 'h-[44px] w-[44px]' : 'h-[58px] w-[58px]'} bg-white p-[4px] border border-emerald-900 shadow-sm`}>
                   <img src={signeeQrUrls[1]} alt="QR verifikasi tanda tangan tim instruktur" className="h-full w-full block" draggable={false} />
                 </div>
               )}

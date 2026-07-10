@@ -49,6 +49,30 @@ create table if not exists public.certificates (
 
 create index if not exists certificates_participant_id_idx on public.certificates(participant_id);
 
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table public.admin_users enable row level security;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.admin_users
+    where user_id = (select auth.uid())
+  );
+$$;
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
+
 alter table public.kegiatan enable row level security;
 alter table public.participants enable row level security;
 alter table public.app_state enable row level security;
@@ -64,8 +88,10 @@ drop policy if exists "authenticated participants access" on public.participants
 drop policy if exists "authenticated app_state access" on public.app_state;
 drop policy if exists "authenticated certificates access" on public.certificates;
 drop policy if exists "public certificate verification" on public.certificates;
-create policy "authenticated kegiatan access" on public.kegiatan for all to authenticated using (true) with check (true);
-create policy "authenticated participants access" on public.participants for all to authenticated using (true) with check (true);
-create policy "authenticated app_state access" on public.app_state for all to authenticated using (true) with check (true);
-create policy "authenticated certificates access" on public.certificates for all to authenticated using (true) with check (true);
+drop policy if exists "admin can view own role" on public.admin_users;
+create policy "authenticated kegiatan access" on public.kegiatan for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "authenticated participants access" on public.participants for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "authenticated app_state access" on public.app_state for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "authenticated certificates access" on public.certificates for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 create policy "public certificate verification" on public.certificates for select to anon using (true);
+create policy "admin can view own role" on public.admin_users for select to authenticated using (user_id = (select auth.uid()));
