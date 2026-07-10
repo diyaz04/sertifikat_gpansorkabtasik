@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { VerificationPayload } from '../types';
+import { IssuedCertificate } from '../types';
+import { getCertificateByToken, isSupabaseConfigured } from '../supabaseDatabase';
 import { ShieldCheck, Calendar, MapPin, Award, BookOpen, User, CheckCircle2, AlertTriangle, Printer } from 'lucide-react';
 import { AnsorLogoSvg } from './CertificatePreview';
 
@@ -9,25 +10,29 @@ interface VerificationPortalProps {
 }
 
 export default function VerificationPortal({ token, onBackToApp }: VerificationPortalProps) {
-  const [data, setData] = useState<VerificationPayload | null>(null);
+  const [certificate, setCertificate] = useState<IssuedCertificate | null>(null);
   const [decodeError, setDecodeError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      // Decode Base64 UTF-8 string safely
-      const decodedJson = decodeURIComponent(atob(token));
-      const parsed = JSON.parse(decodedJson) as VerificationPayload;
-      
-      if (!parsed || !parsed.p || !parsed.p.name) {
-        throw new Error("Struktur data sertifikat tidak lengkap.");
+    let active = true;
+    const verify = async () => {
+      try {
+        if (!isSupabaseConfigured) throw new Error('Portal verifikasi belum terhubung ke Supabase.');
+        const result = await getCertificateByToken(token);
+        if (!active) return;
+        if (!result) {
+          setDecodeError('Sertifikat tidak ditemukan dalam database resmi. Periksa kembali QR code yang dipindai.');
+          return;
+        }
+        setCertificate(result);
+        setDecodeError(null);
+      } catch (err: any) {
+        console.error('Verification error:', err);
+        if (active) setDecodeError(err.message || 'Gagal menghubungi database verifikasi sertifikat.');
       }
-      
-      setData(parsed);
-      setDecodeError(null);
-    } catch (err) {
-      console.error('Decoding error:', err);
-      setDecodeError('Token verifikasi tidak valid, rusak, atau salah format. Pastikan QR code dipindai dari sertifikat resmi GP Ansor Tasikmalaya.');
-    }
+    };
+    verify();
+    return () => { active = false; };
   }, [token]);
 
   if (decodeError) {
@@ -54,7 +59,7 @@ export default function VerificationPortal({ token, onBackToApp }: VerificationP
     );
   }
 
-  if (!data) {
+  if (!certificate) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center space-y-3">
@@ -65,7 +70,8 @@ export default function VerificationPortal({ token, onBackToApp }: VerificationP
     );
   }
 
-  const { p: participant, c: config } = data;
+  const { p: participant, c: config } = certificate.payload;
+  const isRevoked = certificate.status === 'revoked';
   const totalJP = config.materi ? config.materi.reduce((sum, item) => sum + Number(item.h), 0) : 0;
 
   return (
@@ -78,14 +84,17 @@ export default function VerificationPortal({ token, onBackToApp }: VerificationP
       <div className="max-w-3xl w-full bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden relative print:shadow-none print:border-none">
         
         {/* Banner Status Verifikasi */}
-        <div className="bg-emerald-800 text-white px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-amber-500">
+        <div className={`${isRevoked ? 'bg-rose-800' : 'bg-emerald-800'} text-white px-6 py-6 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-amber-500`}>
           <div className="flex items-center gap-4 text-center md:text-left flex-col md:flex-row">
             <div className="p-2.5 bg-white/10 rounded-2xl text-amber-400 border border-white/10">
-              <ShieldCheck className="w-8 h-8 animate-pulse" />
+              {isRevoked ? <AlertTriangle className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8 animate-pulse" />}
             </div>
             <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-700 border border-emerald-600 rounded-full text-[10px] font-black tracking-widest uppercase text-amber-300">
+              <div className="hidden">
                 ● STATUS: TERVERIFIKASI ASLI
+              </div>
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 ${isRevoked ? 'bg-rose-700 border-rose-600' : 'bg-emerald-700 border-emerald-600'} border rounded-full text-[10px] font-black tracking-widest uppercase text-amber-300`}>
+                STATUS: {isRevoked ? 'DICABUT / TIDAK BERLAKU' : 'VALID DAN TERVERIFIKASI'}
               </div>
               <h1 className="text-lg font-black tracking-wide mt-1">PORTAL VERIFIKASI SERTIFIKAT</h1>
               <p className="text-xs text-emerald-100 font-medium">Pimpinan Cabang GP Ansor Kabupaten Tasikmalaya</p>
@@ -234,10 +243,10 @@ export default function VerificationPortal({ token, onBackToApp }: VerificationP
           <div className="border-t border-slate-100 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full animate-ping" />
-              <span>Diverifikasi secara digital melalui tanda tangan pengurus terdaftar</span>
+              <span>{isRevoked ? `Dicabut${certificate.revokedAt ? ` pada ${new Date(certificate.revokedAt).toLocaleString('id-ID')}` : ''}` : `Diterbitkan ${new Date(certificate.issuedAt).toLocaleString('id-ID')}`}</span>
             </div>
             <div className="font-mono text-[10px] text-slate-400 select-all">
-              ID: {participant.id}
+              Token: {certificate.token}
             </div>
           </div>
 

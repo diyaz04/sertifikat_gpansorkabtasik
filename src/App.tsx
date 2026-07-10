@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan } from './types';
+import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan, IssuedCertificate } from './types';
 import { formatIndonesianDate, formatIndonesianDateRange } from './utils';
 import CertificatePreview, { AnsorLogoSvg } from './components/CertificatePreview';
 import GoogleSheetsImporter from './components/GoogleSheetsImporter';
 import SignatureCanvas from './components/SignatureCanvas';
 import VerificationPortal from './components/VerificationPortal';
-import { GoogleSheetsDbPayload, loadGoogleSheetsDatabase, saveGoogleSheetsDatabase } from './googleSheetsDatabase';
+import LandingPage from './components/LandingPage';
+import LoginPage from './components/LoginPage';
+import { getAuthSession, isSupabaseConfigured, issueCertificates, loadSupabaseDatabase, saveSupabaseDatabase, signOut, SupabaseDbPayload } from './supabaseDatabase';
 import { 
   Users, 
   BookOpen, 
@@ -28,7 +30,8 @@ import {
   AlertCircle,
   Calendar,
   MapPin,
-  UserCheck
+  UserCheck,
+  LogOut
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -107,17 +110,32 @@ const defaultConfig: CertificateConfig = {
   signees: [
     { id: 'sign_1', name: 'Sahabat H. Safei, M.Pd.', title: 'Ketua Pimpinan Cabang', type: 'text' },
     { id: 'sign_2', name: 'Sahabat Ahmad Bukhari, S.Sy.', title: 'Sekretaris Cabang', type: 'text' }
-  ]
+  ],
 };
 
 const romanMonthFromDate = (dateStr?: string) => {
-  const month = dateStr && dateStr.split('-').length === 3 ? Number(dateStr.split('-')[1]) : new Date().getMonth() + 1;
   const romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+  const indonesianMonths = [
+    'januari', 'februari', 'maret', 'april', 'mei', 'juni',
+    'juli', 'agustus', 'september', 'oktober', 'november', 'desember',
+  ];
+  let month = new Date().getMonth() + 1;
+  if (dateStr) {
+    const isoMatch = dateStr.match(/^\d{4}-(\d{2})-\d{2}/);
+    if (isoMatch) {
+      month = Number(isoMatch[1]);
+    } else {
+      const normalized = dateStr.toLowerCase();
+      const textMonthIndex = indonesianMonths.findIndex(name => normalized.includes(name));
+      if (textMonthIndex >= 0) month = textMonthIndex + 1;
+    }
+  }
   return romans[Math.max(0, Math.min(11, month - 1))];
 };
 
 const yearFromDate = (dateStr?: string) => {
-  if (dateStr && dateStr.split('-').length === 3) return dateStr.split('-')[0];
+  const yearMatch = dateStr?.match(/\b(20\d{2})\b/);
+  if (yearMatch) return yearMatch[1];
   return new Date().getFullYear().toString();
 };
 
@@ -125,10 +143,15 @@ const buildCertificateNumber = (sequence: number, dateStr?: string) => (
   `${sequence}/PC-XVII/01/${romanMonthFromDate(dateStr)}/${yearFromDate(dateStr)}`
 );
 
-const defaultOnlineDatabaseUrl = import.meta.env.VITE_GOOGLE_SHEETS_DB_URL || '';
+const extractCertificateSequence = (number?: string) => {
+  const sequence = Number((number || '').trim().match(/^\d+/)?.[0] || 0);
+  return Number.isFinite(sequence) ? sequence : 0;
+};
 
 export default function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(null);
+  const [appScreen, setAppScreen] = useState<'landing' | 'login' | 'dashboard'>('landing');
+  const [hasSession, setHasSession] = useState(false);
 
   // Parse URL search parameters on boot to detect QR code scan
   useEffect(() => {
@@ -137,6 +160,11 @@ export default function App() {
     if (token) {
       setVerifyToken(token);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    getAuthSession().then(session => setHasSession(Boolean(session))).catch(() => setHasSession(false));
   }, []);
 
   // Main application states
@@ -199,9 +227,6 @@ export default function App() {
   // Export process loading states
   const [exportProgress, setExportProgress] = useState<string | null>(null);
   const [showNotification, setShowNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [onlineDatabaseUrl, setOnlineDatabaseUrl] = useState<string>(() => {
-    return localStorage.getItem('ansor_google_sheets_db_url') || defaultOnlineDatabaseUrl;
-  });
   const [databaseSyncState, setDatabaseSyncState] = useState<{
     loading: boolean;
     type: 'success' | 'error' | 'info';
@@ -209,8 +234,9 @@ export default function App() {
   }>({
     loading: false,
     type: 'info',
-    message: 'Database online belum dikonfigurasi.',
+    message: isSupabaseConfigured ? 'Menghubungkan ke Supabase...' : 'Supabase belum dikonfigurasi.',
   });
+  const [supabaseReady, setSupabaseReady] = useState(false);
 
   // Persistence triggers
   useEffect(() => {
@@ -225,6 +251,12 @@ export default function App() {
   }, [config]);
 
   useEffect(() => {
+    if (config.lastCertificateSequence !== undefined) return;
+    const highestExisting = Math.max(0, ...participants.map(p => extractCertificateSequence(p.number)));
+    setConfig(prev => ({ ...prev, lastCertificateSequence: highestExisting }));
+  }, [participants, config.lastCertificateSequence]);
+
+  useEffect(() => {
     localStorage.setItem('ansor_active_id', activeParticipantId);
   }, [activeParticipantId]);
 
@@ -237,23 +269,23 @@ export default function App() {
   }, [selectedKegiatanId]);
 
   useEffect(() => {
-    localStorage.setItem('ansor_google_sheets_db_url', onlineDatabaseUrl.trim());
-  }, [onlineDatabaseUrl]);
-
-  useEffect(() => {
     setSelectedIds(new Set());
     setSearchQuery('');
   }, [selectedKegiatanId]);
 
   // Derived/computed active objects
   const activeKegiatan = kegiatanList.find(k => k.id === selectedKegiatanId) || kegiatanList[0] || defaultKegiatan[0];
+  const getLastCertificateSequence = () => Math.max(
+    Number(config.lastCertificateSequence || 0),
+    ...participants.map(participant => extractCertificateSequence(participant.number)),
+  );
 
   const buildOnlineDatabasePayload = (
     nextKegiatanList = kegiatanList,
     nextParticipants = participants,
     nextConfig = config,
     nextSelectedKegiatanId = selectedKegiatanId
-  ): GoogleSheetsDbPayload => ({
+  ): SupabaseDbPayload => ({
     kegiatanList: nextKegiatanList,
     participants: nextParticipants,
     config: nextConfig,
@@ -265,14 +297,14 @@ export default function App() {
     payload = buildOnlineDatabasePayload(),
     silent = false
   ) => {
-    if (!onlineDatabaseUrl.trim()) {
+    if (!isSupabaseConfigured) {
       if (!silent) {
         setDatabaseSyncState({
           loading: false,
           type: 'error',
-          message: 'Isi URL Web App Google Sheets dulu.',
+          message: 'Isi konfigurasi Supabase di environment variables dulu.',
         });
-        triggerNotification('error', 'URL Web App Google Sheets belum diisi.');
+        triggerNotification('error', 'Supabase belum dikonfigurasi.');
       }
       return false;
     }
@@ -280,56 +312,57 @@ export default function App() {
     setDatabaseSyncState({
       loading: true,
       type: 'info',
-      message: 'Menyimpan data ke Google Sheets...',
+      message: 'Menyimpan data ke Supabase...',
     });
 
     try {
-      const result = await saveGoogleSheetsDatabase(onlineDatabaseUrl, payload);
+      const result = await saveSupabaseDatabase(payload);
       setDatabaseSyncState({
         loading: false,
         type: 'success',
         message: `${result.message || 'Database online berhasil disinkronkan.'} (${new Date().toLocaleString('id-ID')})`,
       });
       if (!silent) {
-        triggerNotification('success', 'Database online Google Sheets berhasil diperbarui.');
+        triggerNotification('success', 'Database Supabase berhasil diperbarui.');
       }
+      setSupabaseReady(true);
       return true;
     } catch (err: any) {
       setDatabaseSyncState({
         loading: false,
         type: 'error',
-        message: err.message || 'Gagal sinkron ke Google Sheets.',
+        message: err.message || 'Gagal sinkron ke Supabase.',
       });
       if (!silent) {
-        triggerNotification('error', err.message || 'Gagal sinkron ke Google Sheets.');
+        triggerNotification('error', err.message || 'Gagal sinkron ke Supabase.');
       }
       return false;
     }
   };
 
-  const loadFromOnlineDatabase = async () => {
-    if (!onlineDatabaseUrl.trim()) {
+  const loadFromOnlineDatabase = async (askConfirmation = true) => {
+    if (!isSupabaseConfigured) {
       setDatabaseSyncState({
         loading: false,
         type: 'error',
-        message: 'Isi URL Web App Google Sheets dulu.',
+        message: 'Isi konfigurasi Supabase di environment variables dulu.',
       });
-      triggerNotification('error', 'URL Web App Google Sheets belum diisi.');
+      triggerNotification('error', 'Supabase belum dikonfigurasi.');
       return;
     }
 
-    if (!confirm('Data lokal akan diganti dengan data dari Google Sheets. Lanjutkan?')) {
+    if (askConfirmation && !confirm('Data lokal akan diganti dengan data dari Supabase. Lanjutkan?')) {
       return;
     }
 
     setDatabaseSyncState({
       loading: true,
       type: 'info',
-      message: 'Menarik database dari Google Sheets...',
+      message: 'Menarik database dari Supabase...',
     });
 
     try {
-      const payload = await loadGoogleSheetsDatabase(onlineDatabaseUrl);
+      const payload = await loadSupabaseDatabase();
       if (!payload.kegiatanList || !payload.participants || !payload.config) {
         throw new Error('Format database online tidak lengkap.');
       }
@@ -344,21 +377,38 @@ export default function App() {
       });
       setSelectedKegiatanId(payload.selectedKegiatanId || payload.kegiatanList[0]?.id || 'keg_default');
       setActiveParticipantId(payload.participants[0]?.id || '');
+      setSupabaseReady(true);
       setDatabaseSyncState({
         loading: false,
         type: 'success',
         message: `Database online berhasil dimuat. Sync terakhir: ${payload.syncedAt ? new Date(payload.syncedAt).toLocaleString('id-ID') : '-'}`,
       });
-      triggerNotification('success', 'Data dari Google Sheets berhasil dimuat.');
+      triggerNotification('success', 'Data dari Supabase berhasil dimuat.');
     } catch (err: any) {
       setDatabaseSyncState({
         loading: false,
         type: 'error',
-        message: err.message || 'Gagal menarik database online.',
+        message: err.message || 'Gagal menarik database Supabase.',
       });
       triggerNotification('error', err.message || 'Gagal menarik database online.');
     }
   };
+
+  // Supabase menjadi sumber data utama: tarik saat aplikasi dibuka, lalu auto-save
+  // perubahan dengan debounce agar pengetikan tidak menembakkan request beruntun.
+  useEffect(() => {
+    if (isSupabaseConfigured && hasSession && appScreen === 'dashboard') {
+      loadFromOnlineDatabase(false);
+    }
+  }, [hasSession, appScreen]);
+
+  useEffect(() => {
+    if (!supabaseReady) return;
+    const timeout = window.setTimeout(() => {
+      syncToOnlineDatabase(buildOnlineDatabasePayload(), true);
+    }, 800);
+    return () => window.clearTimeout(timeout);
+  }, [kegiatanList, participants, config, selectedKegiatanId, supabaseReady]);
 
   const markActiveKegiatanDraft = () => {
     setKegiatanList(prev => prev.map(k => (
@@ -391,6 +441,7 @@ export default function App() {
     if (!formData.name) return;
 
     if (editingParticipant) {
+      const editedSequence = extractCertificateSequence(formData.number || editingParticipant.number);
       // Edit mode
       setParticipants(prev => prev.map(p => p.id === editingParticipant.id ? {
         ...p,
@@ -403,17 +454,22 @@ export default function App() {
         tanggalLahir: formData.tanggalLahir,
       } : p));
       markActiveKegiatanDraft();
+      if (editedSequence > Number(config.lastCertificateSequence || 0)) {
+        setConfig(prev => ({ ...prev, lastCertificateSequence: editedSequence }));
+      }
       triggerNotification('success', 'Data kader berhasil diperbarui');
     } else {
       // Create mode
-      const countForKegiatan = participants.filter(p => p.kegiatanId === selectedKegiatanId).length;
-      const fallbackNum = buildCertificateNumber(countForKegiatan + 1, activeKegiatan?.tanggalBerakhir);
+      const nextSequence = getLastCertificateSequence() + 1;
+      const fallbackNum = buildCertificateNumber(nextSequence, activeKegiatan?.tanggalBerakhir);
+      const assignedNumber = formData.number || fallbackNum;
+      const assignedSequence = Math.max(nextSequence, extractCertificateSequence(assignedNumber));
       
       const newParticipant: Participant = {
         id: `part_${Date.now()}`,
         kegiatanId: selectedKegiatanId,
         name: formData.name,
-        number: formData.number || fallbackNum,
+        number: assignedNumber,
         role: formData.role || 'Peserta',
         predicate: formData.predicate,
         institution: formData.institution,
@@ -422,6 +478,7 @@ export default function App() {
         date: activeKegiatan ? formatIndonesianDateRange(activeKegiatan.tanggalMulai, activeKegiatan.tanggalBerakhir) : config.dateText,
       };
       setParticipants(prev => [...prev, newParticipant]);
+      setConfig(prev => ({ ...prev, lastCertificateSequence: assignedSequence }));
       setActiveParticipantId(newParticipant.id);
       markActiveKegiatanDraft();
       triggerNotification('success', 'Kader baru berhasil ditambahkan');
@@ -465,17 +522,23 @@ export default function App() {
 
   // Google Sheets import handler
   const handleImportComplete = (imported: Participant[]) => {
-    const countForKegiatan = participants.filter(p => p.kegiatanId === selectedKegiatanId).length;
+    const firstSequence = getLastCertificateSequence() + 1;
     const importedWithKegId = imported.map((p, index) => ({
       ...p,
       kegiatanId: selectedKegiatanId,
-      number: buildCertificateNumber(countForKegiatan + index + 1, activeKegiatan?.tanggalBerakhir),
+      number: buildCertificateNumber(firstSequence + index, activeKegiatan?.tanggalBerakhir),
       date: activeKegiatan ? formatIndonesianDateRange(activeKegiatan.tanggalMulai, activeKegiatan.tanggalBerakhir) : config.dateText,
     }));
     setParticipants(prev => {
       // Merge: Append newly imported rows
       return [...prev, ...importedWithKegId];
     });
+    if (importedWithKegId.length > 0) {
+      setConfig(prev => ({
+        ...prev,
+        lastCertificateSequence: firstSequence + importedWithKegId.length - 1,
+      }));
+    }
     if (importedWithKegId.length > 0) {
       setActiveParticipantId(importedWithKegId[0].id);
     }
@@ -695,8 +758,59 @@ export default function App() {
     }
   };
 
-  const handleGenerateCertificates = async () => {
-    const pesertaKegiatan = participants.filter(p => p.kegiatanId === selectedKegiatanId);
+  const waitForCertificateRender = async (participantIds: string[]) => {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const ready = participantIds.every((id) => {
+        const front = document.getElementById(`certificate-front-${id}`);
+        const back = document.getElementById(`certificate-back-${id}`);
+        return front && back && front.querySelector('img[alt="QR verifikasi sertifikat"]');
+      });
+      if (ready) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('QR sertifikat belum selesai dirender. Silakan coba kembali.');
+  };
+
+  const handleExportKegiatanPdf = async (peserta: Participant[], judulKegiatan: string) => {
+    if (!peserta.length) return;
+    setExportProgress(`Menyiapkan PDF gabungan ${peserta.length} sertifikat...`);
+    try {
+      await waitForCertificateRender(peserta.map(p => p.id));
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      for (let index = 0; index < peserta.length; index++) {
+        const participant = peserta[index];
+        setExportProgress(`Merender sertifikat ${index + 1}/${peserta.length}: ${participant.name}`);
+        const frontEl = document.getElementById(`certificate-front-${participant.id}`);
+        const backEl = document.getElementById(`certificate-back-${participant.id}`);
+        if (!frontEl || !backEl) throw new Error(`Template ${participant.name} tidak ditemukan.`);
+
+        const frontCanvas = await renderCertificateCanvas(frontEl, 2);
+        if (index > 0) pdf.addPage();
+        pdf.addImage(frontCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
+
+        const backCanvas = await renderCertificateCanvas(backEl, 2);
+        pdf.addPage();
+        pdf.addImage(backCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 297, 210);
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      const safeName = judulKegiatan.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+      pdf.save(`Semua_Sertifikat_${safeName || 'Kegiatan'}.pdf`);
+      triggerNotification('success', `PDF gabungan ${peserta.length} sertifikat berhasil diunduh.`);
+    } catch (err: any) {
+      console.error(err);
+      triggerNotification('error', err.message || 'Gagal membuat PDF gabungan kegiatan.');
+    } finally {
+      setExportProgress(null);
+    }
+  };
+
+  const handleGenerateCertificates = async (kegiatanId = selectedKegiatanId) => {
+    const kegiatan = kegiatanList.find(k => k.id === kegiatanId) || activeKegiatan;
+    const pesertaKegiatan = participants.filter(p => p.kegiatanId === kegiatanId);
+    setSelectedKegiatanId(kegiatanId);
 
     if (pesertaKegiatan.length === 0) {
       triggerNotification('error', 'Import atau tambah peserta dulu sebelum generate sertifikat.');
@@ -704,7 +818,7 @@ export default function App() {
       return;
     }
 
-    if (!activeKegiatan.materi || activeKegiatan.materi.length === 0) {
+    if (!kegiatan.materi || kegiatan.materi.length === 0) {
       triggerNotification('error', 'Isi minimal satu materi kegiatan sebelum generate sertifikat.');
       setActiveTab('materi');
       return;
@@ -712,23 +826,69 @@ export default function App() {
 
     const generatedAt = new Date().toISOString();
     const nextKegiatanList = kegiatanList.map(k => (
-      k.id === selectedKegiatanId ? { ...k, generatedAt } : k
+      k.id === kegiatanId ? { ...k, generatedAt } : k
     ));
+    const nextParticipants = participants.map((participant) => (
+      participant.kegiatanId === kegiatanId
+        ? { ...participant, verificationToken: participant.verificationToken || crypto.randomUUID() }
+        : participant
+    ));
+    const issuedParticipants = nextParticipants.filter(p => p.kegiatanId === kegiatanId);
 
     setKegiatanList(nextKegiatanList);
+    setParticipants(nextParticipants);
     setSelectedIds(new Set(pesertaKegiatan.map(p => p.id)));
     setActiveParticipantId(pesertaKegiatan[0].id);
     setActiveTab('riwayat');
-    if (onlineDatabaseUrl.trim()) {
-      const onlineOk = await syncToOnlineDatabase(buildOnlineDatabasePayload(nextKegiatanList, participants), true);
+    let certificatesIssued = true;
+    if (isSupabaseConfigured) {
+      let onlineOk = await syncToOnlineDatabase(buildOnlineDatabasePayload(nextKegiatanList, nextParticipants), true);
+      if (onlineOk) {
+        try {
+          const certificates: IssuedCertificate[] = issuedParticipants.map((participant) => ({
+            token: participant.verificationToken!,
+            participantId: participant.id,
+            status: 'valid',
+            issuedAt: generatedAt,
+            payload: {
+              p: {
+                ...participant,
+                number: buildCertificateNumber(Number((participant.number || '1').match(/\d+/)?.[0] || 1), kegiatan.tanggalBerakhir),
+                date: participant.date || formatIndonesianDate(kegiatan.tanggalBerakhir),
+              },
+              c: {
+                title: config.title,
+                eventName: kegiatan.judulKegiatan,
+                subEventName: `Kecamatan ${kegiatan.tempatPelaksanaan}`,
+                location: kegiatan.tempatPelaksanaan,
+                dateText: formatIndonesianDateRange(kegiatan.tanggalMulai, kegiatan.tanggalBerakhir),
+                materi: kegiatan.materi.map(m => ({ t: m.title, h: m.hours })),
+                signees: [
+                  ...config.signees.map(s => ({ n: s.name, t: s.title })),
+                  { n: kegiatan.ketuaPelaksana, t: 'Ketua Pelaksana' },
+                ],
+              },
+            },
+          }));
+          await issueCertificates(certificates);
+        } catch (err: any) {
+          onlineOk = false;
+          setDatabaseSyncState({ loading: false, type: 'error', message: err.message || 'Gagal menerbitkan token sertifikat.' });
+        }
+      }
+      certificatesIssued = onlineOk;
       triggerNotification(
         onlineOk ? 'success' : 'error',
         onlineOk
-          ? `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal dan dikirim ke Google Sheets.`
-          : `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal, tapi gagal sinkron ke Google Sheets.`
+          ? `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal dan dikirim ke Supabase.`
+          : `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal, tapi gagal sinkron ke Supabase.`
       );
     } else {
-      triggerNotification('success', `Sertifikat ${pesertaKegiatan.length} peserta tersimpan untuk ${activeKegiatan.judulKegiatan}.`);
+      triggerNotification('success', `Sertifikat ${pesertaKegiatan.length} peserta tersimpan untuk ${kegiatan.judulKegiatan}.`);
+    }
+
+    if (certificatesIssued) {
+      await handleExportKegiatanPdf(issuedParticipants, kegiatan.judulKegiatan);
     }
   };
 
@@ -870,6 +1030,22 @@ export default function App() {
     );
   }
 
+  if (appScreen === 'landing') {
+    return <LandingPage onEnter={() => setAppScreen('login')} />;
+  }
+
+  if (appScreen === 'login') {
+    return (
+      <LoginPage
+        onBack={() => setAppScreen('landing')}
+        onSuccess={() => {
+          setHasSession(true);
+          setAppScreen('dashboard');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen bg-slate-100 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       
@@ -985,7 +1161,7 @@ export default function App() {
             <span className="text-emerald-400 font-bold uppercase block mb-1">Status Sistem</span>
             <div className="flex items-center gap-2 font-medium text-emerald-100">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span> 
-              {onlineDatabaseUrl.trim() ? 'Google Sheets Aktif' : 'Auto-Save Lokal Aktif'}
+              {isSupabaseConfigured ? 'Supabase Aktif' : 'Auto-Save Lokal Aktif'}
             </div>
           </div>
         </div>
@@ -1006,10 +1182,23 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-              <span>{onlineDatabaseUrl.trim() ? 'Database Online Aktif' : 'Auto-Save Lokal Aktif'}</span>
+              <span>{isSupabaseConfigured ? 'Supabase Online Aktif' : 'Auto-Save Lokal Aktif'}</span>
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await signOut(); } catch (err) { console.error(err); }
+                  setHasSession(false);
+                  setAppScreen('landing');
+                }}
+                title="Keluar dari aplikasi"
+                className="p-2 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden md:inline">Keluar</span>
+              </button>
               {/* Backup actions */}
               <button
                 onClick={handleBackupExport}
@@ -1180,6 +1369,16 @@ export default function App() {
                         <span className="text-[11px] font-bold text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg shrink-0 mr-1">
                           {count} Kader
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateCertificates(k.id)}
+                          disabled={count === 0 || exportProgress !== null}
+                          className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white text-[10px] font-black px-2.5 py-2 rounded-lg transition-all"
+                          title="Generate satu PDF berisi semua sertifikat kegiatan"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />
+                          Generate PDF
+                        </button>
                         <button
                           onClick={() => startEditKegiatan(k)}
                           className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition-colors"
@@ -1610,11 +1809,11 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={handleGenerateCertificates}
+                onClick={() => handleGenerateCertificates()}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-black uppercase tracking-wide px-5 py-3.5 rounded-xl transition-all shadow-sm"
               >
                 <FileDown className="w-4 h-4" />
-                Generate Semua Sertifikat
+                Generate & Unduh Semua Sertifikat
               </button>
             </div>
           )}
@@ -1735,22 +1934,15 @@ export default function App() {
                     <Database className="w-5 h-5" />
                   </div>
                   <div className="space-y-1 flex-1">
-                    <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wide">Database Online Google Sheets</h4>
+                    <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wide">Database Online Supabase</h4>
                     <p className="text-xs text-emerald-900/75 leading-relaxed">
-                      Tempel URL Web App Google Apps Script. Saat generate, data kegiatan, peserta, materi, dan status sertifikat otomatis disimpan ke Google Sheets.
+                      Supabase menjadi database utama. Data dimuat saat aplikasi dibuka dan setiap perubahan tersimpan otomatis.
                     </p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">URL Web App Apps Script</label>
-                  <input
-                    type="url"
-                    value={onlineDatabaseUrl}
-                    onChange={(e) => setOnlineDatabaseUrl(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                    className="w-full text-xs bg-white border border-emerald-100 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
-                  />
+                <div className="text-[11px] text-slate-600 bg-white border border-emerald-100 rounded-xl p-3">
+                  Status konfigurasi: <strong>{isSupabaseConfigured ? 'URL dan anon key terpasang' : 'belum terpasang di environment variables'}</strong>
                 </div>
 
                 <div className={`p-3 rounded-xl border text-xs font-semibold leading-relaxed ${
@@ -1771,16 +1963,16 @@ export default function App() {
                     className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
                   >
                     {databaseSyncState.loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    Simpan ke Google Sheets
+                    Migrasikan Data Lokal
                   </button>
                   <button
                     type="button"
-                    onClick={loadFromOnlineDatabase}
+                    onClick={() => loadFromOnlineDatabase(true)}
                     disabled={databaseSyncState.loading}
                     className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 disabled:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Tarik dari Google Sheets
+                    Muat Ulang dari Supabase
                   </button>
                 </div>
               </div>

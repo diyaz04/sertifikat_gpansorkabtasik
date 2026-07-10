@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Participant, CertificateConfig, VerificationPayload } from '../types';
+import { Participant, CertificateConfig } from '../types';
 import { formatIndonesianDate } from '../utils';
 import { Award } from 'lucide-react';
 import templatePkdUrl from '../assets/template-pkd.jpg';
@@ -82,44 +82,12 @@ export default function CertificatePreview({ participant, config, showBackPage =
           ...config.signees.map(s => ({ n: s.name, t: s.title })),
           { n: config.ketuaPelaksana || 'Ketua Pelaksana', t: 'Ketua Pelaksana' }
         ];
-        const mainPayload: VerificationPayload = {
-          p: {
-            ...participant,
-            number: displayCertificateNumber,
-            date: participant.date || config.dateText,
-          },
-          c: {
-            title: config.title,
-            eventName: config.eventName,
-            subEventName: config.subEventName,
-            location: config.location,
-            dateText: config.dateText,
-            materi: config.materi.map(m => ({ t: m.title, h: m.hours })),
-            signees: certificateSignees,
-          }
-        };
-        const compactParticipant = {
-          id: participant.id,
-          name: participant.name,
-          number: displayCertificateNumber,
-          role: participant.role,
-          predicate: participant.predicate,
-          institution: participant.institution,
-          date: participant.date || config.dateText,
-        };
-        const compactConfig = {
-          title: config.title,
-          eventName: config.eventName,
-          subEventName: config.subEventName,
-          location: config.location,
-          dateText: config.dateText,
-          materi: [],
-        };
-        const makeVerificationUrl = (payload: VerificationPayload) => {
-          const encoded = btoa(encodeURIComponent(JSON.stringify(payload)));
-          return `${window.location.origin}${window.location.pathname}?verify=${encoded}`;
-        };
-        const baseUrl = makeVerificationUrl(mainPayload);
+        if (!participant.verificationToken) {
+          setCertificateQrUrl('');
+          setSigneeQrUrls([]);
+          return;
+        }
+        const verificationUrl = `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(participant.verificationToken)}`;
         const makeQr = (url: string, width = 120) => QRCode.toDataURL(url, {
           errorCorrectionLevel: 'M',
           margin: 0,
@@ -130,14 +98,8 @@ export default function CertificatePreview({ participant, config, showBackPage =
           }
         });
 
-        const mainQr = await makeQr(baseUrl, 140);
-        const sigQrs = await Promise.all(certificateSignees.map((signee) => makeQr(makeVerificationUrl({
-          p: compactParticipant,
-          c: {
-            ...compactConfig,
-            signees: [signee],
-          },
-        }), 128)));
+        const mainQr = await makeQr(verificationUrl, 140);
+        const sigQrs = await Promise.all(certificateSignees.map(() => makeQr(verificationUrl, 128)));
         setCertificateQrUrl(mainQr);
         setSigneeQrUrls(sigQrs);
       } catch (err) {

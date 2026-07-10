@@ -9,6 +9,7 @@ export interface Participant {
   tempatLahir?: string; // Tempat Lahir
   tanggalLahir?: string; // Tanggal Lahir (YYYY-MM-DD atau teks)
   date?: string; // Tanggal pelaksanaan / penerbitan
+  verificationToken?: string; // Token acak yang ditanam pada QR
 }
 
 export interface MateriItem {
@@ -48,6 +49,7 @@ export interface CertificateConfig {
   customBackgroundUrl?: string; // Jika user menyimpan template di public atau upload
   issuedDateText?: string; // Tanggal selesai/terbit pada sertifikat depan
   ketuaPelaksana?: string; // Nama ketua pelaksana untuk template depan
+  lastCertificateSequence?: number; // Nomor urut global lintas kegiatan
 }
 
 export interface VerificationPayload {
@@ -61,4 +63,15 @@ export interface VerificationPayload {
     materi: { t: string; h: number }[]; // Minimalized for smaller URL size
     signees: { n: string; t: string }[];
   };
+}
+
+export type CertificateStatus = 'valid' | 'revoked';
+
+export interface IssuedCertificate {
+  token: string;
+  participantId: string;
+  status: CertificateStatus;
+  payload: VerificationPayload;
+  issuedAt: string;
+  revokedAt?: string;
 }
