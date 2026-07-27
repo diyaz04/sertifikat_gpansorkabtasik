@@ -57,5 +57,50 @@
 
   --color-green-400: #4ade80;
   --color-green-500: #22c55e;
+
+  /* Hijau Khas Nahdlatul Ulama (NU Green Palette) */
+  --color-nu-50: #ebfef4;
+  --color-nu-100: #d1fce3;
+  --color-nu-200: #a3f7cb;
+  --color-nu-300: #68edae;
+  --color-nu-400: #2cda8e;
+  --color-nu-500: #0ab971;
+  --color-nu-600: #00965a;
+  --color-nu-700: #007a4b;
+  --color-nu-800: #006633; /* HIJAU KHAS NU UTAMA / ACTIVE */
+  --color-nu-900: #03522b;
+  --color-nu-950: #012d17;
+
+  /* Shadcn UI Design Tokens */
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
+  --color-primary: #006633; /* Hijau Khas NU */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #1e293b;
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+  --color-accent: #ebfef4;
+  --color-accent-foreground: #006633;
+  --color-destructive: #e11d48;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #006633;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 

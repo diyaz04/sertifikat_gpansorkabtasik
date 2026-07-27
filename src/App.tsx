@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
 import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan, IssuedCertificate } from './types';
 import { formatIndonesianDate, formatIndonesianDateRange } from './utils';
 import CertificatePreview, { AnsorLogoSvg } from './components/CertificatePreview';
 import GoogleSheetsImporter from './components/GoogleSheetsImporter';
 import SignatureCanvas from './components/SignatureCanvas';
 import VerificationPortal from './components/VerificationPortal';
-import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import { getAuthSession, isSupabaseConfigured, issueCertificates, loadSupabaseDatabase, saveSupabaseDatabase, signOut, SupabaseDbPayload } from './supabaseDatabase';
 import { 
@@ -51,6 +50,7 @@ const defaultMateri: MateriItem[] = [
 const defaultKegiatan: Kegiatan[] = [
   {
     id: 'keg_default',
+    jenisKegiatan: 'PKD',
     judulKegiatan: 'PKD I PAC GP Ansor Karangjaya',
     tempatPelaksanaan: 'Pondok Pesantren Miftahul Ulum, Karangjaya',
     tanggalMulai: '2026-07-09',
@@ -148,9 +148,52 @@ const extractCertificateSequence = (number?: string) => {
   return Number.isFinite(sequence) ? sequence : 0;
 };
 
+interface HiddenRenderEngineProps {
+  participants: Participant[];
+  kegiatanList: Kegiatan[];
+  activeKegiatan: Kegiatan;
+  config: CertificateConfig;
+}
+
+const HiddenCertificateRenderEngine = memo(function HiddenCertificateRenderEngine({
+  participants,
+  kegiatanList,
+  activeKegiatan,
+  config,
+}: HiddenRenderEngineProps) {
+  return (
+    <div className="fixed left-[-12000px] top-0 pointer-events-none select-none">
+      {participants.map((p) => {
+        const pKegiatan = kegiatanList.find(k => k.id === p.kegiatanId) || activeKegiatan;
+        const pConfig: CertificateConfig = {
+          title: config.title || 'SERTIFIKAT KADERISASI',
+          eventName: pKegiatan ? pKegiatan.judulKegiatan : config.eventName,
+          subEventName: pKegiatan ? `Kecamatan ${pKegiatan.tempatPelaksanaan}` : config.subEventName,
+          location: pKegiatan ? pKegiatan.tempatPelaksanaan : config.location,
+          dateText: pKegiatan 
+            ? formatIndonesianDateRange(pKegiatan.tanggalMulai, pKegiatan.tanggalBerakhir) 
+            : config.dateText,
+          materi: pKegiatan ? pKegiatan.materi : [],
+          signees: config.signees || [],
+          customBackgroundUrl: config.customBackgroundUrl,
+          issuedDateText: pKegiatan ? formatIndonesianDate(pKegiatan.tanggalBerakhir) : config.dateText,
+          ketuaPelaksana: pKegiatan ? pKegiatan.ketuaPelaksana : undefined,
+          jenisKegiatan: pKegiatan ? (pKegiatan.jenisKegiatan || 'PKD') : config.jenisKegiatan
+        };
+        return (
+          <div key={p.id}>
+            <CertificatePreview participant={p} config={pConfig} showBackPage={false} exportMode />
+            <CertificatePreview participant={p} config={pConfig} showBackPage={true} exportMode />
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
 export default function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(null);
-  const [appScreen, setAppScreen] = useState<'landing' | 'login' | 'dashboard'>('landing');
+  const [appScreen, setAppScreen] = useState<'login' | 'dashboard'>('login');
   const [hasSession, setHasSession] = useState(false);
 
   // Parse URL search parameters on boot to detect QR code scan
@@ -217,11 +260,12 @@ export default function App() {
   const [isKegiatanFormOpen, setIsKegiatanFormOpen] = useState(false);
   const [editingKegiatan, setEditingKegiatan] = useState<Kegiatan | null>(null);
   const [kegiatanFormData, setKegiatanFormData] = useState<Partial<Kegiatan>>({
+    jenisKegiatan: 'PKD',
     judulKegiatan: '',
     tempatPelaksanaan: '',
     tanggalMulai: '',
     tanggalBerakhir: '',
-    ketuaPelaksana: ''
+    ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.'
   });
 
   // Export process loading states
@@ -275,6 +319,10 @@ export default function App() {
 
   // Derived/computed active objects
   const activeKegiatan = kegiatanList.find(k => k.id === selectedKegiatanId) || kegiatanList[0] || defaultKegiatan[0];
+  const deferredParticipants = useDeferredValue(participants);
+  const deferredKegiatanList = useDeferredValue(kegiatanList);
+  const deferredActiveKegiatan = useDeferredValue(activeKegiatan);
+  const deferredConfig = useDeferredValue(config);
   const getLastCertificateSequence = () => Math.max(
     Number(config.lastCertificateSequence || 0),
     ...participants.map(participant => extractCertificateSequence(participant.number)),
@@ -521,7 +569,7 @@ export default function App() {
   };
 
   // Google Sheets import handler
-  const handleImportComplete = (imported: Participant[]) => {
+  const handleImportComplete = useCallback((imported: Participant[]) => {
     const firstSequence = getLastCertificateSequence() + 1;
     const importedWithKegId = imported.map((p, index) => ({
       ...p,
@@ -544,7 +592,7 @@ export default function App() {
     }
     markActiveKegiatanDraft();
     triggerNotification('success', `Berhasil mengimpor ${imported.length} kader ke kegiatan "${activeKegiatan.judulKegiatan}"`);
-  };
+  }, [selectedKegiatanId, activeKegiatan, config.dateText, config.lastCertificateSequence, participants, kegiatanList]);
 
   // Kegiatan Form Submit (Manual Create / Edit)
   const handleKegiatanFormSubmit = (e: React.FormEvent) => {
@@ -555,6 +603,7 @@ export default function App() {
       // Edit mode
       setKegiatanList(prev => prev.map(k => k.id === editingKegiatan.id ? {
         ...k,
+        jenisKegiatan: kegiatanFormData.jenisKegiatan || k.jenisKegiatan || 'PKD',
         judulKegiatan: kegiatanFormData.judulKegiatan!,
         tempatPelaksanaan: kegiatanFormData.tempatPelaksanaan || k.tempatPelaksanaan,
         tanggalMulai: kegiatanFormData.tanggalMulai || k.tanggalMulai,
@@ -567,11 +616,12 @@ export default function App() {
       // Create mode
       const newKeg: Kegiatan = {
         id: `keg_${Date.now()}`,
+        jenisKegiatan: kegiatanFormData.jenisKegiatan || 'PKD',
         judulKegiatan: kegiatanFormData.judulKegiatan,
         tempatPelaksanaan: kegiatanFormData.tempatPelaksanaan || 'Kabupaten Tasikmalaya',
         tanggalMulai: kegiatanFormData.tanggalMulai || new Date().toISOString().slice(0, 10),
         tanggalBerakhir: kegiatanFormData.tanggalBerakhir || new Date().toISOString().slice(0, 10),
-        ketuaPelaksana: kegiatanFormData.ketuaPelaksana || '-',
+        ketuaPelaksana: kegiatanFormData.ketuaPelaksana || (kegiatanFormData.jenisKegiatan === 'Dirosah Ula' ? 'Aj. Husni Aziz Mubarok, M.Pd.' : 'Sahabat Ahmad Bukhari, S.Sy.'),
         materi: [...defaultMateri] // Copy default syllabus to start
       };
       setKegiatanList(prev => [...prev, newKeg]);
@@ -582,12 +632,13 @@ export default function App() {
 
     setIsKegiatanFormOpen(false);
     setEditingKegiatan(null);
-    setKegiatanFormData({ judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: '' });
+    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.' });
   };
 
   const startEditKegiatan = (k: Kegiatan) => {
     setEditingKegiatan(k);
     setKegiatanFormData({
+      jenisKegiatan: k.jenisKegiatan || 'PKD',
       judulKegiatan: k.judulKegiatan,
       tempatPelaksanaan: k.tempatPelaksanaan,
       tanggalMulai: k.tanggalMulai,
@@ -865,8 +916,9 @@ export default function App() {
                 materi: kegiatan.materi.map(m => ({ t: m.title, h: m.hours })),
                 signees: [
                   ...config.signees.map(s => ({ n: s.name, t: s.title })),
-                  { n: kegiatan.ketuaPelaksana, t: 'Ketua Pelaksana' },
+                  { n: kegiatan.ketuaPelaksana, t: kegiatan.jenisKegiatan === 'Dirosah Ula' ? 'Ketua MDS Rijalul Ansor Kab. Tasikmalaya' : 'Ketua Pelaksana' },
                 ],
+                jenisKegiatan: kegiatan.jenisKegiatan || 'PKD',
               },
             },
           }));
@@ -1006,19 +1058,26 @@ export default function App() {
   };
 
   // Filter participants based on search query and active event (Kegiatan)
-  const filteredParticipants = participants.filter(p => {
-    if (p.kegiatanId !== selectedKegiatanId) return false;
-    const query = searchQuery.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(query) ||
-      p.number.toLowerCase().includes(query) ||
-      (p.institution && p.institution.toLowerCase().includes(query)) ||
-      (p.role && p.role.toLowerCase().includes(query))
-    );
-  });
+  const filteredParticipants = useMemo(() => {
+    return participants.filter(p => {
+      if (p.kegiatanId !== selectedKegiatanId) return false;
+      const query = searchQuery.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(query) ||
+        p.number.toLowerCase().includes(query) ||
+        (p.institution && p.institution.toLowerCase().includes(query)) ||
+        (p.role && p.role.toLowerCase().includes(query))
+      );
+    });
+  }, [participants, selectedKegiatanId, searchQuery]);
 
-  const activeKegiatanParticipants = participants.filter(p => p.kegiatanId === selectedKegiatanId);
-  const generatedKegiatanList = kegiatanList.filter(k => k.generatedAt);
+  const activeKegiatanParticipants = useMemo(() => {
+    return participants.filter(p => p.kegiatanId === selectedKegiatanId);
+  }, [participants, selectedKegiatanId]);
+
+  const generatedKegiatanList = useMemo(() => {
+    return kegiatanList.filter(k => k.generatedAt);
+  }, [kegiatanList]);
 
   // Render Verification Portal instead of builder if token is detected
   if (verifyToken) {
@@ -1034,14 +1093,9 @@ export default function App() {
     );
   }
 
-  if (appScreen === 'landing') {
-    return <LandingPage onEnter={() => setAppScreen('login')} />;
-  }
-
   if (appScreen === 'login') {
     return (
       <LoginPage
-        onBack={() => setAppScreen('landing')}
         onSuccess={() => {
           setHasSession(true);
           setAppScreen('dashboard');
@@ -1051,120 +1105,122 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-100 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="flex h-screen w-screen bg-slate-50/50 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       
       {/* SIDEBAR NAV (DESKTOP) */}
-      <div className="hidden lg:flex w-64 bg-emerald-950 text-white flex-col border-r border-emerald-900 shrink-0">
-        <div className="p-6 border-b border-emerald-900">
+      <div className="hidden lg:flex w-64 bg-white text-slate-900 flex-col border-r border-slate-200/80 shadow-2xs shrink-0 z-10">
+        <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <AnsorLogoSvg className="w-8 h-8 text-amber-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#006633] text-white shadow-sm shrink-0">
+              <AnsorLogoSvg className="w-6 h-6 text-white" />
+            </div>
             <div className="leading-tight">
-              <h1 className="text-sm font-black tracking-wider text-white">GP ANSOR</h1>
-              <p className="text-[10px] text-amber-400 font-bold opacity-90 tracking-widest">KAB. TASIKMALAYA</p>
+              <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">GP ANSOR</h1>
+              <p className="text-[10px] text-[#006633] font-extrabold uppercase tracking-widest">KAB. TASIKMALAYA</p>
             </div>
           </div>
         </div>
         
-        <nav className="flex-1 p-4 space-y-1.5">
-          <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest px-2 pb-2">Alur Kerja Pembuatan</div>
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">Alur Kerja Pembuatan</div>
           
           <button 
             type="button"
             onClick={() => setActiveTab('kegiatan')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'kegiatan' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Calendar className={`w-4 h-4 shrink-0 ${activeTab === 'kegiatan' ? 'text-white' : 'text-[#006633]'}`} />
             1. Tambah Kegiatan ({kegiatanList.length})
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('kader')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'kader' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Users className={`w-4 h-4 shrink-0 ${activeTab === 'kader' ? 'text-white' : 'text-[#006633]'}`} />
             2. Import Data ({activeKegiatanParticipants.length})
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('materi')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'materi' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+            <BookOpen className={`w-4 h-4 shrink-0 ${activeTab === 'materi' ? 'text-white' : 'text-[#006633]'}`} />
             3. Isi Materi
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('generate')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'generate' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <FileDown className="w-4 h-4 text-emerald-400 shrink-0" />
+            <FileDown className={`w-4 h-4 shrink-0 ${activeTab === 'generate' ? 'text-white' : 'text-[#006633]'}`} />
             4. Generate
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('signatures')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'signatures' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <PenTool className="w-4 h-4 text-emerald-400 shrink-0" />
+            <PenTool className={`w-4 h-4 shrink-0 ${activeTab === 'signatures' ? 'text-white' : 'text-[#006633]'}`} />
             Tanda Tangan
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('config')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'config' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Settings className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'config' ? 'text-white' : 'text-[#006633]'}`} />
             Kop & Desain
           </button>
 
           <button 
             type="button"
             onClick={() => setActiveTab('riwayat')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-colors ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
               activeTab === 'riwayat' 
-                ? 'bg-emerald-900 text-white shadow-sm border border-emerald-800' 
-                : 'text-emerald-100/80 hover:text-white hover:bg-emerald-900/40'
+                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Award className="w-4 h-4 text-emerald-400 shrink-0" />
+            <Award className={`w-4 h-4 shrink-0 ${activeTab === 'riwayat' ? 'text-white' : 'text-[#006633]'}`} />
             5. Data Sertifikat ({generatedKegiatanList.length})
           </button>
         </nav>
 
-        <div className="p-4 border-t border-emerald-900">
-          <div className="bg-emerald-900/40 rounded-xl p-3 text-[11px] leading-relaxed border border-emerald-800/30">
-            <span className="text-emerald-400 font-bold uppercase block mb-1">Status Sistem</span>
-            <div className="flex items-center gap-2 font-medium text-emerald-100">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span> 
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+          <div className="bg-white rounded-xl p-3.5 text-[11px] leading-relaxed border border-slate-200/80 shadow-2xs">
+            <span className="text-slate-500 font-bold uppercase block mb-1 text-[9px] tracking-wider">Status Sistem</span>
+            <div className="flex items-center gap-2 font-bold text-[#006633]">
+              <span className="w-2 h-2 bg-[#006633] rounded-full animate-pulse"></span> 
               {isSupabaseConfigured ? 'Supabase Aktif' : 'Auto-Save Lokal Aktif'}
             </div>
           </div>
@@ -1178,14 +1234,14 @@ export default function App() {
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
             <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Sertifikat GP Ansor</span>
-            <div className="hidden md:block bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-100 uppercase tracking-tight">
+            <div className="hidden md:block bg-[#ebfef4] text-[#006633] px-3 py-1.5 rounded-lg text-xs font-extrabold border border-[#007a3d]/20 uppercase tracking-tight">
               KABUPATEN TASIKMALAYA
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+              <div className="w-1.5 h-1.5 bg-[#006633] rounded-full animate-ping" />
               <span>{isSupabaseConfigured ? 'Supabase Online Aktif' : 'Auto-Save Lokal Aktif'}</span>
             </div>
 
@@ -1195,7 +1251,7 @@ export default function App() {
                 onClick={async () => {
                   try { await signOut(); } catch (err) { console.error(err); }
                   setHasSession(false);
-                  setAppScreen('landing');
+                  setAppScreen('login');
                 }}
                 title="Keluar dari aplikasi"
                 className="p-2 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
@@ -1209,7 +1265,7 @@ export default function App() {
                 title="Ekspor Backup JSON"
                 className="p-2 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
               >
-                <Save className="w-4 h-4 text-emerald-700" />
+                <Save className="w-4 h-4 text-[#006633]" />
                 <span className="hidden md:inline">Ekspor Backup</span>
               </button>
               <label
@@ -1222,7 +1278,7 @@ export default function App() {
                   onChange={(e) => e.target.files?.[0] && handleBackupImport(e.target.files[0])}
                   className="hidden"
                 />
-                <FileText className="w-4 h-4 text-emerald-700" />
+                <FileText className="w-4 h-4 text-[#006633]" />
                 <span className="hidden md:inline">Pulihkan</span>
               </label>
             </div>
@@ -1230,12 +1286,14 @@ export default function App() {
         </header>
 
         {/* MOBILE TOP NAVIGATION BAR */}
-        <div className="lg:hidden bg-emerald-950 text-white border-b border-amber-500 px-4 py-3 flex items-center justify-between shadow-md shrink-0">
+        <div className="lg:hidden bg-white text-slate-900 border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-2xs shrink-0 z-10">
           <div className="flex items-center gap-3">
-            <AnsorLogoSvg className="w-8 h-8" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#006633] text-white shadow-2xs">
+              <AnsorLogoSvg className="w-5 h-5 text-white" />
+            </div>
             <div>
-              <h1 className="text-xs font-black uppercase tracking-wider text-white">Sertifikat GP Ansor</h1>
-              <p className="text-[9px] text-slate-300 font-bold uppercase tracking-wider">Kab. Tasikmalaya</p>
+              <h1 className="text-xs font-black uppercase tracking-wider text-slate-900">Sertifikat GP Ansor</h1>
+              <p className="text-[9px] text-[#006633] font-extrabold uppercase tracking-wider">Kab. Tasikmalaya</p>
             </div>
           </div>
           
@@ -1244,7 +1302,7 @@ export default function App() {
             <select
               value={activeTab}
               onChange={(e) => setActiveTab(e.target.value as any)}
-              className="bg-emerald-900 text-white text-xs border border-emerald-800 rounded-xl px-2.5 py-1.5 font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="bg-slate-100 text-slate-900 text-xs border border-slate-200 rounded-xl px-3 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633]"
             >
               <option value="kegiatan">1. Kegiatan ({kegiatanList.length})</option>
               <option value="kader">2. Import ({activeKegiatanParticipants.length})</option>
@@ -1261,27 +1319,27 @@ export default function App() {
         {showNotification && (
           <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-2xl shadow-2xl border flex items-center gap-3 transition-all duration-300 max-w-sm animate-bounce ${
             showNotification.type === 'success' 
-              ? 'bg-emerald-50 border-emerald-100 text-emerald-950' 
-              : 'bg-rose-50 border-rose-100 text-rose-950'
+              ? 'bg-white border-slate-200 text-slate-900 shadow-xl border-l-4 border-l-[#006633]' 
+              : 'bg-white border-slate-200 text-rose-950 shadow-xl border-l-4 border-l-rose-600'
           }`}>
-            <CheckCircle2 className={`w-5 h-5 shrink-0 ${showNotification.type === 'success' ? 'text-emerald-700' : 'text-rose-600'}`} />
+            <CheckCircle2 className={`w-5 h-5 shrink-0 ${showNotification.type === 'success' ? 'text-[#006633]' : 'text-rose-600'}`} />
             <p className="text-xs font-bold leading-snug">{showNotification.text}</p>
           </div>
         )}
 
         {/* EXPORTING LOADING PROGRESS SCREEN */}
         {exportProgress && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-white text-center">
-            <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl relative overflow-hidden">
-              <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              <div className="text-sm font-bold text-slate-200 uppercase tracking-widest">MEMPROSES EKSPOR</div>
-              <p className="text-xs text-slate-400 font-medium leading-relaxed">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+            <div className="bg-white border border-slate-200 p-8 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl relative overflow-hidden text-slate-900 animate-in zoom-in-95 duration-200">
+              <div className="w-12 h-12 border-4 border-[#006633] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <div className="text-sm font-black text-slate-900 uppercase tracking-widest">MEMPROSES EKSPOR</div>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed">
                 {exportProgress}
               </p>
-              <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-500 to-amber-500 h-full w-2/3 animate-pulse" />
+              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-[#006633] h-full w-2/3 animate-pulse" />
               </div>
-              <span className="text-[10px] text-slate-500 block">Mohon jangan menutup halaman ini selama proses berjalan.</span>
+              <span className="text-[10px] text-slate-400 block">Mohon jangan menutup halaman ini selama proses berjalan.</span>
             </div>
           </div>
         )}
@@ -1296,11 +1354,11 @@ export default function App() {
           {activeTab === 'kegiatan' && (
             <div className="p-5 space-y-6 animate-in fade-in duration-200">
               {/* Info Card banner */}
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex gap-3.5 shadow-sm">
-                <Calendar className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+              <div className="bg-[#ebfef4]/40 border border-[#006633]/20 rounded-2xl p-4 flex gap-3.5 shadow-sm">
+                <Calendar className="w-5 h-5 text-[#006633] shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wide">Pilih atau Tambah Kegiatan</h4>
-                  <p className="text-xs text-emerald-800/80 leading-relaxed">
+                  <h4 className="text-xs font-black text-[#006633] uppercase tracking-wide">Pilih atau Tambah Kegiatan</h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
                     Sertifikat diorganisasikan per pelaksanaan kegiatan. Daftarkan kegiatan Anda terlebih dahulu, kemudian impor data kader untuk kegiatan tersebut.
                   </p>
                 </div>
@@ -1315,11 +1373,11 @@ export default function App() {
                 <button
                   onClick={() => {
                     setEditingKegiatan(null);
-                    setKegiatanFormData({ judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: '' });
+                    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.' });
                     setIsKegiatanFormOpen(true);
                   }}
                   type="button"
-                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
+                  className="flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white font-bold text-[11px] px-3.5 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Buat Kegiatan
@@ -1336,20 +1394,29 @@ export default function App() {
                       key={k.id}
                       className={`p-4 rounded-xl border transition-all relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4 cursor-pointer ${
                         isSelected 
-                          ? 'border-emerald-600 bg-emerald-50/20 ring-2 ring-emerald-600/10' 
+                          ? 'border-[#006633] bg-[#ebfef4]/30 ring-2 ring-[#006633]/15' 
                           : 'border-slate-200 bg-white hover:border-slate-300'
                       }`}
                       onClick={() => setSelectedKegiatanId(k.id)}
                     >
                       {isSelected && (
-                        <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-emerald-600" />
+                        <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-[#006633]" />
                       )}
                       
                       <div className="space-y-2 flex-1 pl-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                            k.jenisKegiatan === 'PKL'
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : k.jenisKegiatan === 'Dirosah Ula'
+                              ? 'bg-blue-700 text-white shadow-sm'
+                              : 'bg-[#006633] text-white shadow-sm'
+                          }`}>
+                            {k.jenisKegiatan || 'PKD'}
+                          </span>
                           <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-tight">{k.judulKegiatan}</h4>
                           {isSelected && (
-                            <span className="bg-emerald-700 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full">Aktif</span>
+                            <span className="bg-[#006633] text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full">Aktif</span>
                           )}
                         </div>
                         
@@ -1364,7 +1431,7 @@ export default function App() {
                           </div>
                           <div className="flex items-center gap-1.5 col-span-2 mt-1">
                             <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="font-medium text-slate-600">Ketua Pelaksana: <strong className="text-slate-800">{k.ketuaPelaksana}</strong></span>
+                            <span className="font-medium text-slate-600">{k.jenisKegiatan === 'Dirosah Ula' ? 'Ketua MDS Rijalul Ansor:' : 'Ketua Pelaksana:'} <strong className="text-slate-800">{k.ketuaPelaksana}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -1377,7 +1444,7 @@ export default function App() {
                           type="button"
                           onClick={() => handleGenerateCertificates(k.id)}
                           disabled={count === 0 || exportProgress !== null}
-                          className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white text-[10px] font-black px-2.5 py-2 rounded-lg transition-all"
+                          className="flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] disabled:bg-slate-200 disabled:text-slate-400 text-white text-[10px] font-black px-2.5 py-2 rounded-lg transition-all cursor-pointer"
                           title="Generate satu PDF berisi semua sertifikat kegiatan"
                         >
                           <FileDown className="w-3.5 h-3.5" />
@@ -1408,7 +1475,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('kader')}
-                  className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-extrabold uppercase hover:underline"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#006633] font-extrabold uppercase hover:underline cursor-pointer"
                 >
                   Lanjut Langkah 2: Impor Data Kader &rarr;
                 </button>
@@ -1440,7 +1507,7 @@ export default function App() {
                       setIsFormOpen(true);
                     }}
                     type="button"
-                    className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-3 py-2 rounded-xl transition-all shadow-sm"
+                    className="flex items-center gap-1 bg-[#006633] hover:bg-[#005229] text-white font-bold text-xs px-3 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Tambah Kader
@@ -1456,7 +1523,7 @@ export default function App() {
                       placeholder="Cari nama, utusan, nomor..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                     />
                   </div>
 
@@ -1483,7 +1550,7 @@ export default function App() {
                               type="checkbox"
                               checked={filteredParticipants.length > 0 && selectedIds.size === filteredParticipants.length}
                               onChange={(e) => handleSelectAll(e.target.checked)}
-                              className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                              className="rounded border-slate-300 text-[#006633] focus:ring-[#006633]"
                             />
                           </th>
                           <th className="p-3">Kader / No. Sertifikat</th>
@@ -1498,7 +1565,7 @@ export default function App() {
                               key={p.id} 
                               onClick={() => setActiveParticipantId(p.id)}
                               className={`cursor-pointer hover:bg-slate-50/50 transition-colors ${
-                                activeParticipantId === p.id ? 'bg-emerald-50/30 font-medium' : ''
+                                activeParticipantId === p.id ? 'bg-[#ebfef4]/50 font-medium' : ''
                               }`}
                             >
                               <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -1506,20 +1573,20 @@ export default function App() {
                                   type="checkbox"
                                   checked={selectedIds.has(p.id)}
                                   onChange={(e) => handleSelectRow(p.id, e.target.checked)}
-                                  className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                                  className="rounded border-slate-300 text-[#006633] focus:ring-[#006633]"
                                 />
                               </td>
                               <td className="p-3 space-y-0.5">
                                 <div className="font-extrabold text-slate-800 uppercase flex items-center gap-1.5">
                                   {p.name}
                                   {activeParticipantId === p.id && (
-                                    <span className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                                    <span className="w-1.5 h-1.5 bg-[#006633] rounded-full" />
                                   )}
                                 </div>
                                 <div className="text-[10px] text-slate-400 font-mono">No: {p.number}</div>
                               </td>
                               <td className="p-3 space-y-0.5">
-                                <span className="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
+                                <span className="bg-[#ebfef4] text-[#006633] text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">
                                   {p.institution || 'PAC CABANG'}
                                 </span>
                                 {p.predicate && (
@@ -1561,7 +1628,7 @@ export default function App() {
                     type="button"
                     onClick={() => setActiveTab('materi')}
                     disabled={activeKegiatanParticipants.length === 0}
-                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     Lanjut Isi Materi
                     <ChevronRight className="w-4 h-4" />
@@ -1590,7 +1657,7 @@ export default function App() {
                 <select
                   value={selectedKegiatanId}
                   onChange={(e) => setSelectedKegiatanId(e.target.value)}
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                 >
                   {kegiatanList.map(k => (
                     <option key={k.id} value={k.id}>
@@ -1611,7 +1678,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('generate')}
-                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     Buka Generate
                     <ChevronRight className="w-4 h-4" />
@@ -1636,7 +1703,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setActiveTab('kader')}
-                        className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider hover:underline"
+                        className="text-[10px] text-[#006633] font-extrabold uppercase tracking-wider hover:underline cursor-pointer"
                       >
                         Impor Sekarang &rarr;
                       </button>
@@ -1646,7 +1713,7 @@ export default function App() {
                       <div 
                         key={p.id}
                         className={`p-3.5 hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-4 ${
-                          activeParticipantId === p.id ? 'bg-emerald-50/20 font-semibold' : ''
+                          activeParticipantId === p.id ? 'bg-[#ebfef4]/30 font-semibold' : ''
                         }`}
                       >
                         <div className="space-y-1 min-w-0 flex-1">
@@ -1656,7 +1723,7 @@ export default function App() {
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
                             <span className="font-mono text-slate-400">No: {p.number}</span>
                             <span>&bull;</span>
-                            <span className="font-semibold text-emerald-700">{p.institution || 'PAC CABANG'}</span>
+                            <span className="font-semibold text-[#006633]">{p.institution || 'PAC CABANG'}</span>
                             {p.tempatLahir && p.tanggalLahir && (
                               <>
                                 <span>&bull;</span>
@@ -1670,7 +1737,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => handleDownloadPdf(p)}
-                            className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-all shadow-sm"
+                            className="flex items-center gap-1 bg-[#006633] hover:bg-[#005229] text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg transition-all shadow-sm cursor-pointer"
                             title="Download PDF"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -1718,7 +1785,7 @@ export default function App() {
                             type="text"
                             value={item.title}
                             onChange={(e) => updateMateriRow(item.id, 'title', e.target.value)}
-                            className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-semibold focus:outline-none focus:border-emerald-600"
+                            className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-semibold focus:outline-none focus:border-[#006633]"
                           />
                         </div>
 
@@ -1730,7 +1797,7 @@ export default function App() {
                               min="1"
                               value={item.hours}
                               onChange={(e) => updateMateriRow(item.id, 'hours', Number(e.target.value))}
-                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-mono focus:outline-none focus:border-emerald-600"
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-mono focus:outline-none focus:border-[#006633]"
                             />
                           </div>
                           <div>
@@ -1739,7 +1806,7 @@ export default function App() {
                               type="text"
                               value={item.instructor || ''}
                               onChange={(e) => updateMateriRow(item.id, 'instructor', e.target.value)}
-                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-emerald-600"
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-[#006633]"
                             />
                           </div>
                         </div>
@@ -1751,7 +1818,7 @@ export default function App() {
                 <button
                   onClick={addMateriRow}
                   type="button"
-                  className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-300 py-3 rounded-xl hover:bg-slate-50 hover:border-emerald-500 text-xs font-bold text-slate-600 hover:text-emerald-800 transition-all"
+                  className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-300 py-3 rounded-xl hover:bg-slate-50 hover:border-[#006633] text-xs font-bold text-slate-600 hover:text-[#006633] transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Tambah Baris Materi Kurikulum
@@ -1761,7 +1828,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('generate')}
-                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     Lanjut Generate
                     <ChevronRight className="w-4 h-4" />
@@ -1774,11 +1841,11 @@ export default function App() {
           {/* TAB 3: GENERATE & SIMPAN SERTIFIKAT */}
           {activeTab === 'generate' && (
             <div className="p-5 space-y-5 animate-in fade-in duration-200">
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex gap-3.5 shadow-sm">
-                <FileDown className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+              <div className="bg-[#ebfef4]/40 border border-[#006633]/20 rounded-2xl p-4 flex gap-3.5 shadow-sm">
+                <FileDown className="w-5 h-5 text-[#006633] shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wide">Generate & Simpan Sertifikat</h4>
-                  <p className="text-xs text-emerald-800/80 leading-relaxed">
+                  <h4 className="text-xs font-black text-[#006633] uppercase tracking-wide">Generate & Simpan Sertifikat</h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
                     Setelah tombol ini ditekan, data sertifikat kegiatan akan masuk ke menu Data Sertifikat Per Pelaksanaan dan dapat dicetak satu per satu kapan saja.
                   </p>
                 </div>
@@ -1791,15 +1858,15 @@ export default function App() {
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-slate-100 text-center">
                   <div className="p-4">
-                    <div className="text-2xl font-black text-emerald-800">{activeKegiatanParticipants.length}</div>
+                    <div className="text-2xl font-black text-[#006633]">{activeKegiatanParticipants.length}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Peserta</div>
                   </div>
                   <div className="p-4">
-                    <div className="text-2xl font-black text-emerald-800">{activeKegiatan.materi.length}</div>
+                    <div className="text-2xl font-black text-[#006633]">{activeKegiatan.materi.length}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Materi</div>
                   </div>
                   <div className="p-4">
-                    <div className="text-2xl font-black text-emerald-800">{activeKegiatan.materi.reduce((sum, item) => sum + Number(item.hours), 0)}</div>
+                    <div className="text-2xl font-black text-[#006633]">{activeKegiatan.materi.reduce((sum, item) => sum + Number(item.hours), 0)}</div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total JP</div>
                   </div>
                 </div>
@@ -1814,7 +1881,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => handleGenerateCertificates()}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-black uppercase tracking-wide px-5 py-3.5 rounded-xl transition-all shadow-sm"
+                className="w-full flex items-center justify-center gap-2 bg-[#006633] hover:bg-[#005229] text-white text-sm font-black uppercase tracking-wide px-5 py-3.5 rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 <FileDown className="w-4 h-4" />
                 Generate & Unduh Semua Sertifikat
@@ -1832,8 +1899,8 @@ export default function App() {
 
               {/* Draw Signature Pad overlay/modal */}
               {drawingSigneeId && (
-                <div className="p-4 border border-emerald-100 bg-emerald-50/25 rounded-2xl space-y-3 mb-4">
-                  <p className="text-xs font-bold text-emerald-950">Menggambar Tanda Tangan untuk:</p>
+                <div className="p-4 border border-[#006633]/20 bg-[#ebfef4]/40 rounded-2xl space-y-3 mb-4">
+                  <p className="text-xs font-black text-[#006633]">Menggambar Tanda Tangan untuk:</p>
                   <p className="text-xs text-slate-600 italic">
                     {config.signees.find(s => s.id === drawingSigneeId)?.name} ({config.signees.find(s => s.id === drawingSigneeId)?.title})
                   </p>
@@ -1852,7 +1919,7 @@ export default function App() {
                 {config.signees.map((signee) => (
                   <div key={signee.id} className="p-4 border border-slate-200 rounded-xl space-y-4 bg-white shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="bg-emerald-50 text-emerald-800 text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full uppercase">
+                      <span className="bg-[#ebfef4] text-[#006633] text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full uppercase">
                         {signee.title}
                       </span>
                     </div>
@@ -1865,7 +1932,7 @@ export default function App() {
                           required
                           value={signee.name}
                           onChange={(e) => updateSignee(signee.id, 'name', e.target.value)}
-                          className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 font-bold uppercase focus:outline-none focus:border-emerald-600"
+                          className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 font-bold uppercase focus:outline-none focus:border-[#006633]"
                         />
                       </div>
 
@@ -1875,9 +1942,9 @@ export default function App() {
                           <button
                             onClick={() => setDrawingSigneeId(signee.id)}
                             type="button"
-                            className="flex items-center justify-center gap-1.5 border border-slate-200 rounded-lg py-2 text-xs font-bold hover:bg-slate-50 transition-colors"
+                            className="flex items-center justify-center gap-1.5 border border-slate-200 rounded-lg py-2 text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer"
                           >
-                            <PenTool className="w-3.5 h-3.5 text-emerald-700" />
+                            <PenTool className="w-3.5 h-3.5 text-[#006633]" />
                             Gores Tangan
                           </button>
                           
@@ -1888,7 +1955,7 @@ export default function App() {
                               onChange={(e) => e.target.files?.[0] && handleSignatureUpload(signee.id, e.target.files[0])}
                               className="hidden"
                             />
-                            <Download className="w-3.5 h-3.5 text-emerald-700 rotate-180" />
+                            <Download className="w-3.5 h-3.5 text-[#006633] rotate-180" />
                             Unggah Gambar
                           </label>
                         </div>
@@ -1903,7 +1970,7 @@ export default function App() {
                               alt="Signature preview" 
                               className="max-h-12 max-w-28 object-contain bg-white/70 p-1 rounded border border-slate-200" 
                             />
-                            <span className="text-[10px] text-emerald-800 font-bold">Tanda Tangan Tersimpan</span>
+                            <span className="text-[10px] text-[#006633] font-bold">Tanda Tangan Tersimpan</span>
                           </div>
                           <button
                             onClick={() => updateSignee(signee.id, 'signatureDataUrl', undefined)}
@@ -1932,26 +1999,26 @@ export default function App() {
                 <p className="text-xs text-slate-500">Sesuaikan tulisan judul, jenis pelatihan, lokasi, dan tanggal pelaksanaan</p>
               </div>
 
-              <div className="border border-emerald-100 bg-emerald-50/25 rounded-2xl p-4 space-y-3">
+              <div className="border border-[#006633]/20 bg-[#ebfef4]/40 rounded-2xl p-4 space-y-3">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-white border border-emerald-100 rounded-xl text-emerald-700 shrink-0">
+                  <div className="p-2 bg-white border border-[#006633]/20 rounded-xl text-[#006633] shrink-0">
                     <Database className="w-5 h-5" />
                   </div>
                   <div className="space-y-1 flex-1">
-                    <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wide">Database Online Supabase</h4>
-                    <p className="text-xs text-emerald-900/75 leading-relaxed">
+                    <h4 className="text-xs font-black text-[#006633] uppercase tracking-wide">Database Online Supabase</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
                       Supabase menjadi database utama. Data dimuat saat aplikasi dibuka dan setiap perubahan tersimpan otomatis.
                     </p>
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-600 bg-white border border-emerald-100 rounded-xl p-3">
+                <div className="text-[11px] text-slate-600 bg-white border border-[#006633]/20 rounded-xl p-3">
                   Status konfigurasi: <strong>{isSupabaseConfigured ? 'URL dan anon key terpasang' : 'belum terpasang di environment variables'}</strong>
                 </div>
 
                 <div className={`p-3 rounded-xl border text-xs font-semibold leading-relaxed ${
                   databaseSyncState.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
+                    ? 'bg-[#ebfef4] border-[#006633]/30 text-[#006633]'
                     : databaseSyncState.type === 'error'
                       ? 'bg-rose-50 border-rose-100 text-rose-900'
                       : 'bg-white border-slate-100 text-slate-600'
@@ -1964,7 +2031,7 @@ export default function App() {
                     type="button"
                     onClick={() => syncToOnlineDatabase()}
                     disabled={databaseSyncState.loading}
-                    className="flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="flex items-center justify-center gap-1.5 bg-[#006633] hover:bg-[#005229] disabled:bg-slate-200 text-white text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     {databaseSyncState.loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     Migrasikan Data Lokal
@@ -1973,7 +2040,7 @@ export default function App() {
                     type="button"
                     onClick={() => loadFromOnlineDatabase(true)}
                     disabled={databaseSyncState.loading}
-                    className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 disabled:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                    className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 disabled:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-black uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Muat Ulang dari Supabase
@@ -1990,7 +2057,7 @@ export default function App() {
                     value={config.title}
                     onChange={(e) => setConfig({ ...config, title: e.target.value.toUpperCase() })}
                     placeholder="SERTIFIKAT KADERISASI"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 font-extrabold focus:outline-none focus:border-emerald-600"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 font-extrabold focus:outline-none focus:border-[#006633]"
                   />
                 </div>
 
@@ -2002,7 +2069,7 @@ export default function App() {
                     value={config.eventName}
                     onChange={(e) => setConfig({ ...config, eventName: e.target.value })}
                     placeholder="Pelatihan Kepemimpinan Dasar (PKD)"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 font-semibold focus:outline-none focus:border-emerald-600"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 font-semibold focus:outline-none focus:border-[#006633]"
                   />
                 </div>
 
@@ -2013,7 +2080,7 @@ export default function App() {
                     value={config.subEventName || ''}
                     onChange={(e) => setConfig({ ...config, subEventName: e.target.value })}
                     placeholder="Angkatan XV PAC GP Ansor Singaparna"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-emerald-600"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-[#006633]"
                   />
                 </div>
 
@@ -2026,7 +2093,7 @@ export default function App() {
                       value={config.location}
                       onChange={(e) => setConfig({ ...config, location: e.target.value })}
                       placeholder="Tasikmalaya"
-                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-emerald-600"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-[#006633]"
                     />
                   </div>
                   <div>
@@ -2037,7 +2104,7 @@ export default function App() {
                       value={config.dateText}
                       onChange={(e) => setConfig({ ...config, dateText: e.target.value })}
                       placeholder="09 - 11 Juli 2026"
-                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-emerald-600"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none focus:border-[#006633]"
                     />
                   </div>
                 </div>
@@ -2047,7 +2114,7 @@ export default function App() {
 
           {/* STATIC INFO BOX ON BOTTOM OF LEFT PANEL */}
           <div className="mt-auto p-4 bg-slate-100/70 border-t border-slate-200 flex items-center gap-3 text-[10px] text-slate-500 leading-normal">
-            <Award className="w-5 h-5 text-emerald-800 shrink-0" />
+            <Award className="w-5 h-5 text-[#006633] shrink-0" />
             <div>
               <span className="font-bold text-slate-700 block">Sertifikasi Mandiri GP Ansor Cabang Tasikmalaya</span>
               QR code unik pada setiap sertifikat mengemas seluruh informasi secara aman dan bebas manipulasi.
@@ -2057,53 +2124,26 @@ export default function App() {
         </div>
 
         {/* Hidden certificate render engine for PDF export */}
-        <div className="fixed left-[-12000px] top-0 pointer-events-none select-none">
-            {participants.map((p) => {
-              const pKegiatan = kegiatanList.find(k => k.id === p.kegiatanId) || activeKegiatan;
-              const pConfig: CertificateConfig = {
-                title: config.title || 'SERTIFIKAT KADERISASI',
-                eventName: pKegiatan ? pKegiatan.judulKegiatan : config.eventName,
-                subEventName: pKegiatan ? `Kecamatan ${pKegiatan.tempatPelaksanaan}` : config.subEventName,
-                location: pKegiatan ? pKegiatan.tempatPelaksanaan : config.location,
-                dateText: pKegiatan 
-                  ? formatIndonesianDateRange(pKegiatan.tanggalMulai, pKegiatan.tanggalBerakhir) 
-                  : config.dateText,
-                materi: pKegiatan ? pKegiatan.materi : [],
-                signees: config.signees || [],
-                customBackgroundUrl: config.customBackgroundUrl,
-                issuedDateText: pKegiatan ? formatIndonesianDate(pKegiatan.tanggalBerakhir) : config.dateText,
-                ketuaPelaksana: pKegiatan ? pKegiatan.ketuaPelaksana : undefined
-              };
-              return (
-                <div key={p.id}>
-                  <CertificatePreview participant={p} config={pConfig} showBackPage={false} exportMode />
-                  <CertificatePreview participant={p} config={pConfig} showBackPage={true} exportMode />
-                </div>
-              );
-            })}
-            {/*
-            <span className="font-bold text-emerald-800 uppercase tracking-widest block mb-0.5">ℹ️ Petunjuk Pencetakan:</span>
-          </div>
-
-        </div>
-
-            */}
-        </div>
-
+        <HiddenCertificateRenderEngine
+          participants={deferredParticipants}
+          kegiatanList={deferredKegiatanList}
+          activeKegiatan={deferredActiveKegiatan}
+          config={deferredConfig}
+        />
         </div>
 
       {/* MODAL / SIDEBAR: MANUAL ADD/EDIT KADER FORM */}
       {isFormOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="bg-emerald-950 text-white px-5 py-4 flex items-center justify-between border-b border-amber-500">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white text-slate-900 px-6 py-5 flex items-center justify-between border-b border-slate-100">
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
                 {editingParticipant ? 'Edit Data Kader' : 'Tambah Kader Baru'}
               </h3>
               <button
                 onClick={() => setIsFormOpen(false)}
                 type="button"
-                className="text-slate-300 hover:text-white font-bold text-lg"
+                className="text-slate-400 hover:text-slate-900 font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>
@@ -2119,7 +2159,7 @@ export default function App() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Sahabat Muhammad"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-semibold"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-semibold"
                 />
               </div>
 
@@ -2130,7 +2170,7 @@ export default function App() {
                   value={formData.number}
                   onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                   placeholder="1/PC-XVII/01/VII/2026"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-mono"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-mono"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">Biarkan kosong untuk generate nomor urut otomatis.</span>
               </div>
@@ -2143,7 +2183,7 @@ export default function App() {
                     value={formData.institution}
                     onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
                     placeholder="Singaparna"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                   />
                 </div>
 
@@ -2155,7 +2195,7 @@ export default function App() {
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     placeholder="Peserta"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                   />
                 </div>
               </div>
@@ -2168,7 +2208,7 @@ export default function App() {
                     value={formData.tempatLahir || ''}
                     onChange={(e) => setFormData({ ...formData, tempatLahir: e.target.value })}
                     placeholder="Tasikmalaya"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-semibold"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-semibold"
                   />
                 </div>
 
@@ -2178,7 +2218,7 @@ export default function App() {
                     type="date"
                     value={formData.tanggalLahir || ''}
                     onChange={(e) => setFormData({ ...formData, tanggalLahir: e.target.value })}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                   />
                 </div>
               </div>
@@ -2188,7 +2228,7 @@ export default function App() {
                 <select
                   value={formData.predicate}
                   onChange={(e) => setFormData({ ...formData, predicate: e.target.value })}
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                 >
                   <option value="Istimewa">Istimewa</option>
                   <option value="Sangat Memuaskan">Sangat Memuaskan</option>
@@ -2208,7 +2248,7 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  className="px-5 py-2.5 bg-[#006633] hover:bg-[#005229] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
                   {editingParticipant ? 'Simpan Perubahan' : 'Tambahkan Kader'}
                 </button>
@@ -2221,16 +2261,16 @@ export default function App() {
 
       {/* MODAL / SIDEBAR: MANUAL ADD/EDIT KEGIATAN FORM */}
       {isKegiatanFormOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="bg-emerald-950 text-white px-5 py-4 flex items-center justify-between border-b border-amber-500">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white text-slate-900 px-6 py-5 flex items-center justify-between border-b border-slate-100">
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
                 {editingKegiatan ? 'Edit Data Kegiatan' : 'Buat Kegiatan Baru'}
               </h3>
               <button
                 onClick={() => setIsKegiatanFormOpen(false)}
                 type="button"
-                className="text-slate-300 hover:text-white font-bold text-lg"
+                className="text-slate-400 hover:text-slate-900 font-bold text-lg cursor-pointer"
               >
                 ✕
               </button>
@@ -2239,6 +2279,29 @@ export default function App() {
             <form onSubmit={handleKegiatanFormSubmit} className="p-5 space-y-4">
               
               <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 font-sans">Jenis Kegiatan / Kaderisasi <span className="text-rose-500">*</span></label>
+                <select
+                  value={kegiatanFormData.jenisKegiatan || 'PKD'}
+                  onChange={(e) => {
+                    const nextJenis = e.target.value as any;
+                    const nextKetua = nextJenis === 'Dirosah Ula'
+                      ? (kegiatanFormData.ketuaPelaksana === 'Sahabat Ahmad Bukhari, S.Sy.' || !kegiatanFormData.ketuaPelaksana ? 'Aj. Husni Aziz Mubarok, M.Pd.' : kegiatanFormData.ketuaPelaksana)
+                      : (kegiatanFormData.ketuaPelaksana === 'Aj. Husni Aziz Mubarok, M.Pd.' || !kegiatanFormData.ketuaPelaksana ? 'Sahabat Ahmad Bukhari, S.Sy.' : kegiatanFormData.ketuaPelaksana);
+                    setKegiatanFormData({
+                      ...kegiatanFormData,
+                      jenisKegiatan: nextJenis,
+                      ketuaPelaksana: nextKetua
+                    });
+                  }}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-bold text-[#006633] uppercase"
+                >
+                  <option value="PKD">PKD (Pelatihan Kepemimpinan Dasar)</option>
+                  <option value="PKL">PKL (Pelatihan Kepemimpinan Lanjutan)</option>
+                  <option value="Dirosah Ula">Dirosah Ula (Rijalul Ansor)</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 font-sans">Nama / Judul Kegiatan <span className="text-rose-500">*</span></label>
                 <input
                   type="text"
@@ -2246,7 +2309,7 @@ export default function App() {
                   value={kegiatanFormData.judulKegiatan || ''}
                   onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, judulKegiatan: e.target.value })}
                   placeholder="Contoh: PKD I PAC GP Ansor Karangjaya"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-bold uppercase"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-bold uppercase"
                 />
               </div>
 
@@ -2258,7 +2321,7 @@ export default function App() {
                   value={kegiatanFormData.tempatPelaksanaan || ''}
                   onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, tempatPelaksanaan: e.target.value })}
                   placeholder="Contoh: Pondok Pesantren Miftahul Ulum, Karangjaya"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-semibold"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-semibold"
                 />
               </div>
 
@@ -2270,7 +2333,7 @@ export default function App() {
                     required
                     value={kegiatanFormData.tanggalMulai || ''}
                     onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, tanggalMulai: e.target.value })}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                   />
                 </div>
 
@@ -2281,20 +2344,22 @@ export default function App() {
                     required
                     value={kegiatanFormData.tanggalBerakhir || ''}
                     onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, tanggalBerakhir: e.target.value })}
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 font-sans">Ketua Pelaksana <span className="text-rose-500">*</span></label>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 font-sans">
+                  {kegiatanFormData.jenisKegiatan === 'Dirosah Ula' ? 'Ketua MDS Rijalul Ansor Kab. Tasikmalaya' : 'Ketua Pelaksana'} <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={kegiatanFormData.ketuaPelaksana || ''}
                   onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, ketuaPelaksana: e.target.value })}
-                  placeholder="Contoh: Sahabat Ahmad Bukhari, S.Sy."
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700 font-semibold"
+                  placeholder={kegiatanFormData.jenisKegiatan === 'Dirosah Ula' ? 'Contoh: Aj. Husni Aziz Mubarok, M.Pd.' : 'Contoh: Sahabat Ahmad Bukhari, S.Sy.'}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-semibold"
                 />
               </div>
 
@@ -2308,7 +2373,7 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  className="px-5 py-2.5 bg-[#006633] hover:bg-[#005229] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
                   {editingKegiatan ? 'Simpan Perubahan' : 'Buat Kegiatan'}
                 </button>

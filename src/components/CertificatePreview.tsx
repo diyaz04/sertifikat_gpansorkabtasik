@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import QRCode from 'qrcode';
 import { Participant, CertificateConfig } from '../types';
 import { formatIndonesianDate } from '../utils';
 import { Award } from 'lucide-react';
 import templatePkdUrl from '../assets/template-pkd.jpg';
+import templatePklUrl from '../assets/template-pkl.jpg';
+import templateDirosahUlaUrl from '../assets/template-dirosah-ula.jpg';
 import ansorLogoUrl from '../assets/logo-ansor.png';
 
 interface CertificatePreviewProps {
@@ -12,6 +14,9 @@ interface CertificatePreviewProps {
   showBackPage?: boolean;
   exportMode?: boolean;
 }
+
+// Global cache for generated verification QR codes to prevent recalculation on every keystroke/render
+const qrCache = new Map<string, { mainQr: string; sigQr: string }>();
 
 export function AnsorLogoSvg({ className = 'w-16 h-16' }: { className?: string }) {
   return (
@@ -24,14 +29,31 @@ export function AnsorLogoSvg({ className = 'w-16 h-16' }: { className?: string }
   );
 }
 
-export default function CertificatePreview({ participant, config, showBackPage = false, exportMode = false }: CertificatePreviewProps) {
+function CertificatePreviewComponent({ participant, config, showBackPage = false, exportMode = false }: CertificatePreviewProps) {
   const [certificateQrUrl, setCertificateQrUrl] = useState('');
   const [signeeQrUrls, setSigneeQrUrls] = useState<string[]>([]);
   const totalJP = config.materi.reduce((sum, item) => sum + Number(item.hours), 0);
   const finishedDate = config.issuedDateText || config.dateText;
+  const defaultActivityName = config.jenisKegiatan === 'PKL'
+    ? 'Pelatihan Kepemimpinan Lanjutan (PKL)'
+    : config.jenisKegiatan === 'Dirosah Ula'
+    ? 'Dirosah Ula / Pendidikan Kader Majelis Dzikir dan Sholawat Rijalul Ansor'
+    : 'Pelatihan Kepemimpinan Dasar (PKD)';
+
   const activityName = config.eventName?.toLowerCase().includes('pkd')
     ? 'Pelatihan Kepemimpinan Dasar (PKD)'
-    : (config.eventName || 'Pelatihan Kepemimpinan Dasar (PKD)');
+    : config.eventName?.toLowerCase().includes('pkl')
+    ? 'Pelatihan Kepemimpinan Lanjutan (PKL)'
+    : config.eventName?.toLowerCase().includes('dirosah') || config.eventName?.toLowerCase().includes('ula')
+    ? 'Dirosah Ula / Pendidikan Kader Majelis Dzikir dan Sholawat Rijalul Ansor'
+    : (config.eventName || defaultActivityName);
+
+  const getTemplateUrl = () => {
+    if (config.customBackgroundUrl) return config.customBackgroundUrl;
+    if (config.jenisKegiatan === 'PKL') return templatePklUrl;
+    if (config.jenisKegiatan === 'Dirosah Ula') return templateDirosahUlaUrl;
+    return templatePkdUrl;
+  };
   const participantNameSize = participant.name.length > 34 ? 24 : participant.name.length > 24 ? 27 : 30;
   const romanMonths: Record<string, string> = {
     Januari: 'I',
@@ -53,43 +75,52 @@ export default function CertificatePreview({ participant, config, showBackPage =
   const displayCertificateNumber = `${numberSequence}/PC-XVII/01/${romanMonths[issuedMonthName]}/${issuedYear}`;
 
   useEffect(() => {
+    let isMounted = true;
     const generateVerificationQr = async () => {
       try {
-        const certificateSignees = [
-          ...config.signees.map(s => ({ n: s.name, t: s.title })),
-          { n: config.ketuaPelaksana || 'Ketua Pelaksana', t: 'Ketua Pelaksana' }
-        ];
+        const signeeCount = Math.max(3, config.signees.length + 1);
         if (!participant.verificationToken) {
-          setCertificateQrUrl('');
-          setSigneeQrUrls([]);
+          if (isMounted) {
+            setCertificateQrUrl('');
+            setSigneeQrUrls([]);
+          }
           return;
         }
-        const verificationUrl = `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(participant.verificationToken)}`;
-        const makeQr = (url: string, width = 120) => QRCode.toDataURL(url, {
-          errorCorrectionLevel: 'M',
-          margin: 0,
-          width,
-          color: {
-            dark: '#022c22',
-            light: '#ffffff'
-          }
-        });
+        const token = participant.verificationToken;
+        let cached = qrCache.get(token);
+        if (!cached) {
+          const verificationUrl = `${window.location.origin}${window.location.pathname}?verify=${encodeURIComponent(token)}`;
+          const makeQr = (url: string, width = 120) => QRCode.toDataURL(url, {
+            errorCorrectionLevel: 'M',
+            margin: 0,
+            width,
+            color: {
+              dark: '#022c22',
+              light: '#ffffff'
+            }
+          });
 
-        const mainQr = await makeQr(verificationUrl, 140);
-        const sigQrs = await Promise.all(certificateSignees.map(() => makeQr(verificationUrl, 128)));
-        setCertificateQrUrl(mainQr);
-        setSigneeQrUrls(sigQrs);
+          const mainQr = await makeQr(verificationUrl, 140);
+          const sigQr = await makeQr(verificationUrl, 128);
+          cached = { mainQr, sigQr };
+          qrCache.set(token, cached);
+        }
+        if (isMounted) {
+          setCertificateQrUrl(cached.mainQr);
+          setSigneeQrUrls(Array(signeeCount).fill(cached.sigQr));
+        }
       } catch (err) {
         console.error('Gagal membuat QR verifikasi sertifikat', err);
       }
     };
 
     generateVerificationQr();
-  }, [participant, config, displayCertificateNumber]);
+    return () => { isMounted = false; };
+  }, [participant.verificationToken, config.signees.length]);
 
   const renderSignatureQr = (index: number, className: string) => (
     signeeQrUrls[index] ? (
-      <div className={`${className} bg-white p-[4px] border border-emerald-900 shadow-sm`}>
+      <div className={`${className} bg-white p-[4px] border border-[#006633] shadow-sm`}>
         <img src={signeeQrUrls[index]} alt={`QR verifikasi tanda tangan ${index + 1}`} className="h-full w-full block" draggable={false} />
       </div>
     ) : null
@@ -107,7 +138,7 @@ export default function CertificatePreview({ participant, config, showBackPage =
         }}
       >
         <img
-          src={templatePkdUrl}
+          src={getTemplateUrl()}
           alt=""
           className="absolute inset-0 h-full w-full object-fill"
           draggable={false}
@@ -166,14 +197,14 @@ export default function CertificatePreview({ participant, config, showBackPage =
           className="absolute left-[710px] top-[716px] w-[300px] text-center text-[13px] font-semibold leading-[1.05] text-black"
           style={{ textDecoration: 'underline', textDecorationThickness: '1px', textUnderlineOffset: '2px' }}
         >
-          {config.ketuaPelaksana || 'Ketua Pelaksana'}
+          {config.ketuaPelaksana || (config.jenisKegiatan === 'Dirosah Ula' ? 'Aj. Husni Aziz Mubarok, M.Pd.' : 'Ketua Pelaksana')}
         </div>
 
         {renderSignatureQr(2, 'absolute left-[828px] top-[649px] h-[64px] w-[64px]')}
 
         {certificateQrUrl && (
           <div className="absolute left-[66px] top-[746px] flex items-center gap-2 text-black">
-            <div className="h-[36px] w-[36px] bg-white p-[2px] border border-emerald-900">
+            <div className="h-[36px] w-[36px] bg-white p-[2px] border border-[#006633]">
               <img src={certificateQrUrl} alt="QR verifikasi sertifikat" className="h-full w-full block" draggable={false} />
             </div>
             <div className="w-[300px] text-[7.5px] leading-[1.2]">
@@ -206,23 +237,23 @@ export default function CertificatePreview({ participant, config, showBackPage =
     return (
       <div 
         id={`certificate-back-${participant.id}`}
-        className="relative bg-white text-slate-800 w-[1123px] h-[794px] overflow-hidden select-none flex flex-col p-[38px] shadow-2xl border-[16px] border-emerald-950"
+        className="relative bg-white text-slate-800 w-[1123px] h-[794px] overflow-hidden select-none flex flex-col p-[38px] shadow-2xl border-[16px] border-[#005229]"
         style={{ 
           fontFamily: "'Inter', sans-serif",
           boxSizing: 'border-box'
         }}
       >
         {/* Corners */}
-        <div className="absolute top-0 left-0 w-24 h-24 border-t-8 border-l-8 border-emerald-800 m-2 rounded-tl-lg pointer-events-none opacity-55" />
-        <div className="absolute top-0 right-0 w-24 h-24 border-t-8 border-r-8 border-emerald-800 m-2 rounded-tr-lg pointer-events-none opacity-55" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 border-b-8 border-l-8 border-emerald-800 m-2 rounded-bl-lg pointer-events-none opacity-55" />
-        <div className="absolute bottom-0 right-0 w-24 h-24 border-b-8 border-r-8 border-emerald-800 m-2 rounded-br-lg pointer-events-none opacity-55" />
+        <div className="absolute top-0 left-0 w-24 h-24 border-t-8 border-l-8 border-[#006633] m-2 rounded-tl-lg pointer-events-none opacity-55" />
+        <div className="absolute top-0 right-0 w-24 h-24 border-t-8 border-r-8 border-[#006633] m-2 rounded-tr-lg pointer-events-none opacity-55" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 border-b-8 border-l-8 border-[#006633] m-2 rounded-bl-lg pointer-events-none opacity-55" />
+        <div className="absolute bottom-0 right-0 w-24 h-24 border-b-8 border-r-8 border-[#006633] m-2 rounded-br-lg pointer-events-none opacity-55" />
         
-        <div className="absolute inset-4 border pointer-events-none rounded-md" style={{ borderColor: 'rgba(6, 95, 70, 0.2)' }} />
+        <div className="absolute inset-4 border pointer-events-none rounded-md" style={{ borderColor: 'rgba(0, 102, 51, 0.2)' }} />
 
         {/* HEADER */}
         <div className={`flex flex-col items-center text-center ${denseLayout ? 'mt-0' : 'mt-1'}`}>
-          <h2 className={`${denseLayout ? 'text-[15px]' : 'text-[18px]'} font-bold text-emerald-900 tracking-wide font-sans uppercase`}>
+          <h2 className={`${denseLayout ? 'text-[15px]' : 'text-[18px]'} font-bold text-[#006633] tracking-wide font-sans uppercase`}>
             DAFTAR MATERI PELATIHAN / KURIKULUM
           </h2>
           <h3 className={`${denseLayout ? 'text-[10px] mt-0.5' : 'text-[13px] mt-1'} font-semibold text-slate-600 tracking-wide uppercase`}>
@@ -234,11 +265,11 @@ export default function CertificatePreview({ participant, config, showBackPage =
         {/* TABLE OF MATERI */}
         <div className={`flex-1 flex flex-col justify-start px-8 overflow-hidden ${denseLayout ? 'my-1' : 'my-2'}`}>
           {/* BIODATA PESERTA */}
-          <div className={`border rounded-xl grid grid-cols-2 text-slate-800 ${denseLayout ? 'p-2 mb-1.5 gap-3 text-[9.5px]' : 'p-3 mb-3 gap-4 text-xs'}`} style={{ backgroundColor: 'rgba(236, 253, 245, 0.4)', borderColor: 'rgba(209, 250, 229, 0.6)' }}>
+          <div className={`border rounded-xl grid grid-cols-2 text-slate-800 ${denseLayout ? 'p-2 mb-1.5 gap-3 text-[9.5px]' : 'p-3 mb-3 gap-4 text-xs'}`} style={{ backgroundColor: 'rgba(235, 254, 244, 0.5)', borderColor: 'rgba(0, 102, 51, 0.2)' }}>
             <div className={denseLayout ? 'space-y-0.5' : 'space-y-1.5'}>
               <div className="flex">
                 <span className="font-bold text-slate-500 w-28 shrink-0">Nama Lengkap</span>
-                <span className="font-bold text-emerald-950">: {participant.name || '-'}</span>
+                <span className="font-bold text-[#006633]">: {participant.name || '-'}</span>
               </div>
               <div className="flex">
                 <span className="font-bold text-slate-500 w-28 shrink-0">Utusan Peserta</span>
@@ -262,7 +293,7 @@ export default function CertificatePreview({ participant, config, showBackPage =
 
           <table className="w-full text-left border-collapse border border-slate-300 rounded-lg overflow-hidden shadow-sm table-fixed">
             <thead>
-              <tr className="bg-emerald-800 text-white font-sans uppercase tracking-wider text-[11px]">
+              <tr className="bg-[#006633] text-white font-sans uppercase tracking-wider text-[11px]">
                 <th style={headerCellStyle} className="border border-slate-300 align-middle text-center w-10">No</th>
                 <th style={headerCellStyle} className="border border-slate-300 align-middle text-left">Materi Pokok / Sub-Materi</th>
                 <th style={headerCellStyle} className="border border-slate-300 align-middle w-[125px] text-center">Jam Pelajaran (JP)</th>
@@ -287,7 +318,7 @@ export default function CertificatePreview({ participant, config, showBackPage =
                 </tr>
               )}
               {/* Total Jam Pelajaran Row */}
-              <tr className="font-bold text-emerald-950" style={{ backgroundColor: 'rgba(236, 253, 245, 0.7)' }}>
+              <tr className="font-bold text-[#006633]" style={{ backgroundColor: 'rgba(235, 254, 244, 0.7)' }}>
                 <td colSpan={2} style={headerCellStyle} className="border border-slate-300 align-middle text-right uppercase tracking-wider text-[10px]">
                   Total Alokasi Jam Pelajaran
                 </td>
@@ -307,13 +338,13 @@ export default function CertificatePreview({ participant, config, showBackPage =
             <p className={`${denseLayout ? 'text-[8px]' : 'text-[10px]'} text-slate-500 font-medium italic leading-relaxed`}>
               * Kurikulum ini disusun dan disahkan sesuai Standar Organisasi dan Administrasi Kaderisasi GP Ansor (PO GP Ansor).
             </p>
-            <div className={`flex items-center gap-1.5 ${denseLayout ? 'mt-1 text-[9px]' : 'mt-2 text-[11px]'} font-semibold text-emerald-800`}>
+            <div className={`flex items-center gap-1.5 ${denseLayout ? 'mt-1 text-[9px]' : 'mt-2 text-[11px]'} font-semibold text-[#006633]`}>
               <Award className="w-4 h-4 text-amber-500" />
               Sertifikat Terakreditasi Cabang Kabupaten Tasikmalaya
             </div>
             {certificateQrUrl && (
               <div className={`${denseLayout ? 'mt-1.5' : 'mt-3'} flex items-center gap-2 text-slate-700`}>
-                <div className={`${denseLayout ? 'h-[34px] w-[34px]' : 'h-[42px] w-[42px]'} bg-white p-[2px] border border-emerald-900`}>
+                <div className={`${denseLayout ? 'h-[34px] w-[34px]' : 'h-[42px] w-[42px]'} bg-white p-[2px] border border-[#006633]`}>
                   <img src={certificateQrUrl} alt="QR verifikasi sertifikat" className="h-full w-full block" draggable={false} />
                 </div>
                 <p className="max-w-[330px] text-[8.5px] leading-snug">
@@ -328,12 +359,12 @@ export default function CertificatePreview({ participant, config, showBackPage =
             <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">
               Disahkan di Tasikmalaya,
             </p>
-            <p className="text-[10px] text-emerald-900 uppercase font-black tracking-wider leading-tight">
+            <p className="text-[10px] text-[#006633] uppercase font-black tracking-wider leading-tight">
               TIM INSTRUKTUR CABANG
             </p>
             <div className={`flex ${denseLayout ? 'h-[48px]' : 'h-[68px]'} items-center justify-center`}>
               {signeeQrUrls[1] && (
-                <div className={`${denseLayout ? 'h-[44px] w-[44px]' : 'h-[58px] w-[58px]'} bg-white p-[4px] border border-emerald-900 shadow-sm`}>
+                <div className={`${denseLayout ? 'h-[44px] w-[44px]' : 'h-[58px] w-[58px]'} bg-white p-[4px] border border-[#006633] shadow-sm`}>
                   <img src={signeeQrUrls[1]} alt="QR verifikasi tanda tangan tim instruktur" className="h-full w-full block" draggable={false} />
                 </div>
               )}
@@ -363,3 +394,24 @@ export default function CertificatePreview({ participant, config, showBackPage =
     )
   );
 }
+
+function arePropsEqual(prev: CertificatePreviewProps, next: CertificatePreviewProps) {
+  return (
+    prev.showBackPage === next.showBackPage &&
+    prev.exportMode === next.exportMode &&
+    prev.participant === next.participant &&
+    prev.config.title === next.config.title &&
+    prev.config.eventName === next.config.eventName &&
+    prev.config.subEventName === next.config.subEventName &&
+    prev.config.location === next.config.location &&
+    prev.config.dateText === next.config.dateText &&
+    prev.config.issuedDateText === next.config.issuedDateText &&
+    prev.config.ketuaPelaksana === next.config.ketuaPelaksana &&
+    prev.config.customBackgroundUrl === next.config.customBackgroundUrl &&
+    prev.config.jenisKegiatan === next.config.jenisKegiatan &&
+    prev.config.materi === next.config.materi &&
+    prev.config.signees === next.config.signees
+  );
+}
+
+export default memo(CertificatePreviewComponent, arePropsEqual);

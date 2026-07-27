@@ -128,22 +128,22 @@ export default function SignatureCanvas({ onSave, onCancel, initialValue }: Sign
   };
 
   return (
-    <div className="bg-white p-5 rounded-2xl border border-emerald-100 shadow-xl max-w-md w-full mx-auto">
+    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xl max-w-md w-full mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <PenTool className="text-emerald-700 w-5 h-5" />
+          <PenTool className="text-[#006633] w-5 h-5" />
           <h3 className="text-md font-semibold text-slate-800">Tanda Tangan Pad</h3>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setColor('#000000')}
-            className={`w-6 h-6 rounded-full border ${color === '#000000' ? 'border-emerald-600 scale-110 shadow-sm' : 'border-slate-300'}`}
+            className={`w-6 h-6 rounded-full border cursor-pointer ${color === '#000000' ? 'border-[#006633] scale-110 shadow-sm' : 'border-slate-300'}`}
             style={{ backgroundColor: '#000000' }}
             title="Hitam"
           />
           <button
             onClick={() => setColor('#0000b3')}
-            className={`w-6 h-6 rounded-full border ${color === '#0000b3' ? 'border-emerald-600 scale-110 shadow-sm' : 'border-slate-300'}`}
+            className={`w-6 h-6 rounded-full border cursor-pointer ${color === '#0000b3' ? 'border-[#006633] scale-110 shadow-sm' : 'border-slate-300'}`}
             style={{ backgroundColor: '#0000b3' }}
             title="Biru Ink"
           />
@@ -193,7 +193,7 @@ export default function SignatureCanvas({ onSave, onCancel, initialValue }: Sign
             onClick={saveSignature}
             disabled={!hasDrawn}
             type="button"
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:hover:bg-emerald-700 rounded-lg transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-[#006633] hover:bg-[#005229] disabled:opacity-50 disabled:hover:bg-[#006633] rounded-lg transition-all shadow-sm cursor-pointer"
           >
             <Check className="w-3.5 h-3.5" />
             Simpan Tanda Tangan

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import * as XLSX from 'xlsx';
 import { Participant } from '../types';
 import { 
@@ -19,7 +19,7 @@ interface GoogleSheetsImporterProps {
   currentParticipantsCount: number;
 }
 
-export default function GoogleSheetsImporter({ onImportComplete, currentParticipantsCount }: GoogleSheetsImporterProps) {
+function GoogleSheetsImporter({ onImportComplete, currentParticipantsCount }: GoogleSheetsImporterProps) {
   const [sheetUrl, setSheetUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -289,7 +289,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-700">
+          <div className="p-2.5 bg-[#ebfef4] rounded-xl text-[#006633]">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
@@ -302,7 +302,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
           <button
             onClick={handleDownloadTemplate}
             type="button"
-            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100/70 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold text-[#006633] hover:text-[#005229] bg-[#ebfef4] hover:bg-[#ebfef4]/80 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Download Template
@@ -319,13 +319,13 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
       </div>
 
       {showGuide && (
-        <div className="mb-6 p-4 bg-emerald-50/50 rounded-xl border border-emerald-100/50 text-xs text-emerald-950 space-y-2 leading-relaxed">
-          <p className="font-bold text-sm text-emerald-900 mb-1">💡 Cara Menghubungkan Google Sheets:</p>
+        <div className="mb-6 p-4 bg-[#ebfef4]/50 rounded-xl border border-[#006633]/20 text-xs text-[#006633] space-y-2 leading-relaxed">
+          <p className="font-bold text-sm text-[#006633] mb-1">💡 Cara Menghubungkan Google Sheets:</p>
           <ol className="list-decimal pl-4 space-y-1.5">
             <li>Buka file Google Sheets berisi daftar nama kader GP Ansor Anda.</li>
             <li>Pastikan baris pertama berisi Judul Kolom: <strong>Nama</strong>, <strong>Tempat Lahir</strong>, <strong>Tanggal Lahir</strong>, dan <strong>Utusan Peserta</strong>.</li>
-            <li>Klik tombol <strong className="bg-emerald-100 px-1 py-0.5 rounded text-emerald-900">Bagikan (Share)</strong> di sudut kanan atas Google Sheets.</li>
-            <li>Di bawah bagian <i>"Akses umum"</i>, ubah "Dibatasi" menjadi <strong className="text-emerald-800 font-bold">"Siapa saja yang memiliki link dapat melihat" (Anyone with link can view)</strong>.</li>
+            <li>Klik tombol <strong className="bg-[#ebfef4] px-1 py-0.5 rounded text-[#006633]">Bagikan (Share)</strong> di sudut kanan atas Google Sheets.</li>
+            <li>Di bawah bagian <i>"Akses umum"</i>, ubah "Dibatasi" menjadi <strong className="text-[#006633] font-bold">"Siapa saja yang memiliki link dapat melihat" (Anyone with link can view)</strong>.</li>
             <li>Salin link dokumen dari kotak alamat browser Anda, lalu tempelkan (paste) di kolom input di bawah ini.</li>
           </ol>
         </div>
@@ -333,25 +333,25 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
 
       {/* Excel Upload */}
       <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="border border-emerald-100 bg-emerald-50/20 rounded-xl p-4 space-y-2">
-          <div className="flex items-center gap-2 text-emerald-900">
+        <div className="border border-[#006633]/20 bg-[#ebfef4]/20 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2 text-[#006633]">
             <Download className="w-4 h-4" />
             <span className="text-xs font-black uppercase tracking-wide">Template Excel</span>
           </div>
-          <p className="text-xs text-emerald-800/80 leading-relaxed">
+          <p className="text-xs text-[#006633]/80 leading-relaxed">
             Gunakan template agar kolom otomatis terbaca: Nama, Tempat Lahir, Tanggal Lahir, dan Utusan Peserta.
           </p>
           <button
             type="button"
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-lg transition-all"
+            className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white text-xs font-bold px-3 py-2 rounded-lg transition-all cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Download Template
           </button>
         </div>
 
-        <label className="border border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/20 rounded-xl p-4 flex flex-col justify-center gap-2 cursor-pointer transition-colors">
+        <label className="border border-dashed border-slate-300 hover:border-[#006633] bg-slate-50 hover:bg-[#ebfef4]/20 rounded-xl p-4 flex flex-col justify-center gap-2 cursor-pointer transition-colors">
           <input
             type="file"
             accept=".xlsx,.xls,.csv"
@@ -363,7 +363,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
             }}
           />
           <div className="flex items-center gap-2 text-slate-800">
-            <Upload className="w-4 h-4 text-emerald-700" />
+            <Upload className="w-4 h-4 text-[#006633]" />
             <span className="text-xs font-black uppercase tracking-wide">Upload File Excel</span>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed">
@@ -385,12 +385,12 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
               value={sheetUrl}
               onChange={(e) => setSheetUrl(e.target.value)}
               placeholder="https://docs.google.com/spreadsheets/d/xxxxxx/edit?usp=sharing"
-              className="flex-1 text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 focus:border-emerald-700"
+              className="flex-1 text-sm bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
             />
             <button
               type="submit"
               disabled={isLoading}
-              className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-5 py-3 rounded-xl text-sm transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-2 bg-[#006633] hover:bg-[#005229] text-white font-bold px-5 py-3 rounded-xl text-sm transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               {isLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -412,15 +412,15 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
       )}
 
       {success && (
-        <div className="mt-4 p-3.5 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl flex items-start gap-3 text-xs leading-relaxed">
-          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+        <div className="mt-4 p-3.5 bg-[#ebfef4] border border-[#006633]/20 text-[#006633] rounded-xl flex items-start gap-3 text-xs leading-relaxed">
+          <CheckCircle className="w-4 h-4 text-[#006633] shrink-0 mt-0.5" />
           <div>{success}</div>
         </div>
       )}
 
       {/* Column Mapping Configuration */}
       {headers.length > 0 && (
-        <div className="mt-6 p-5 border border-emerald-100 bg-emerald-50/10 rounded-xl space-y-4">
+        <div className="mt-6 p-5 border border-[#006633]/20 bg-[#ebfef4]/10 rounded-xl space-y-4">
           <div>
             <h3 className="text-sm font-bold text-slate-800">Pemetaan Kolom Data Import</h3>
             <p className="text-xs text-slate-500 mt-0.5">Nomor sertifikat dan status peserta akan dibuat otomatis oleh aplikasi</p>
@@ -434,7 +434,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
                 <select
                   value={mapping.name}
                   onChange={(e) => setMapping({ ...mapping, name: e.target.value })}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-[#006633]"
                 >
                   <option value="">-- Pilih Kolom Nama --</option>
                   {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -450,7 +450,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
                 <select
                   value={mapping.institution}
                   onChange={(e) => setMapping({ ...mapping, institution: e.target.value })}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-[#006633]"
                 >
                   <option value="">-- Tanpa Utusan --</option>
                   {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -466,7 +466,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
                 <select
                   value={mapping.tempatLahir}
                   onChange={(e) => setMapping({ ...mapping, tempatLahir: e.target.value })}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-[#006633]"
                 >
                   <option value="">-- Tanpa Tempat Lahir --</option>
                   {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -482,7 +482,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
                 <select
                   value={mapping.tanggalLahir}
                   onChange={(e) => setMapping({ ...mapping, tanggalLahir: e.target.value })}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-emerald-600"
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg py-2 pl-3 pr-8 appearance-none text-slate-800 font-medium focus:outline-none focus:border-[#006633]"
                 >
                   <option value="">-- Tanpa Tanggal Lahir --</option>
                   {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -496,7 +496,7 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
             <button
               onClick={handleApplyImport}
               type="button"
-              className="flex items-center gap-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-all shadow-sm hover:shadow"
+              className="flex items-center gap-2 bg-[#006633] hover:bg-[#005229] text-white font-bold px-5 py-2.5 rounded-xl text-xs transition-all shadow-sm hover:shadow cursor-pointer"
             >
               <Check className="w-4 h-4" />
               Terapkan & Impor ({rawData.length} Kader)
@@ -507,3 +507,5 @@ export default function GoogleSheetsImporter({ onImportComplete, currentParticip
     </div>
   );
 }
+
+export default memo(GoogleSheetsImporter);

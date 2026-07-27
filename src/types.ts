@@ -27,8 +27,11 @@ export interface Signee {
   type: 'drawn' | 'upload' | 'text';
 }
 
+export type JenisKegiatan = 'PKD' | 'PKL' | 'Dirosah Ula';
+
 export interface Kegiatan {
   id: string;
+  jenisKegiatan?: JenisKegiatan; // PKD | PKL | Dirosah Ula (default: PKD)
   judulKegiatan: string; // PKD 1 PAC Karangjaya
   tempatPelaksanaan: string; // Tempat pelaksanaan
   tanggalMulai: string; // Tanggal Mulai (YYYY-MM-DD)
@@ -50,6 +53,7 @@ export interface CertificateConfig {
   issuedDateText?: string; // Tanggal selesai/terbit pada sertifikat depan
   ketuaPelaksana?: string; // Nama ketua pelaksana untuk template depan
   lastCertificateSequence?: number; // Nomor urut global lintas kegiatan
+  jenisKegiatan?: JenisKegiatan; // Untuk memilih template gambar (PKD / PKL / Dirosah Ula)
 }
 
 export interface VerificationPayload {
@@ -62,6 +66,7 @@ export interface VerificationPayload {
     dateText: string;
     materi: { t: string; h: number }[]; // Minimalized for smaller URL size
     signees: { n: string; t: string }[];
+    jenisKegiatan?: JenisKegiatan;
   };
 }
 
