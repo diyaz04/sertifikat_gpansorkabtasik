@@ -48,10 +48,12 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
     ? 'Dirosah Ula / Pendidikan Kader Majelis Dzikir dan Sholawat Rijalul Ansor'
     : (config.eventName || defaultActivityName);
 
+  const isDirosahUla = config.jenisKegiatan === 'Dirosah Ula' || config.eventName?.toLowerCase().includes('dirosah') || config.eventName?.toLowerCase().includes('ula') || config.eventName?.toLowerCase().includes('rijalul');
+
   const getTemplateUrl = () => {
     if (config.customBackgroundUrl) return config.customBackgroundUrl;
     if (config.jenisKegiatan === 'PKL') return templatePklUrl;
-    if (config.jenisKegiatan === 'Dirosah Ula') return templateDirosahUlaUrl;
+    if (isDirosahUla) return templateDirosahUlaUrl;
     return templatePkdUrl;
   };
   const participantNameSize = participant.name.length > 34 ? 24 : participant.name.length > 24 ? 27 : 30;
@@ -193,12 +195,13 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
           Tasikmalaya, {finishedDate}
         </div>
 
-        {config.jenisKegiatan === 'Dirosah Ula' && (
+        {isDirosahUla && (
           <div 
-            className="absolute left-[680px] top-[620px] w-[360px] h-[25px] flex items-center justify-center text-center text-[12.5px] font-bold text-black z-10 whitespace-nowrap tracking-tight"
+            className="absolute left-[680px] top-[620px] w-[360px] h-[28px] text-center text-[12.5px] font-bold z-10 whitespace-nowrap tracking-tight rounded-sm"
             style={{ 
-              background: 'radial-gradient(ellipse at center, #e6ebef 75%, rgba(230,235,239,0) 100%)',
-              textShadow: '0 0 4px #e6ebef, 0 0 8px #e6ebef'
+              backgroundColor: '#e8eced',
+              color: '#004349',
+              lineHeight: '28px'
             }}
           >
             Ketua MDS Rijalul Ansor Kab. Tasikmalaya
@@ -209,7 +212,7 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
           className="absolute left-[710px] top-[716px] w-[300px] text-center text-[13px] font-semibold leading-[1.05] text-black"
           style={{ textDecoration: 'underline', textDecorationThickness: '1px', textUnderlineOffset: '2px' }}
         >
-          {config.jenisKegiatan === 'Dirosah Ula' && (config.ketuaPelaksana === 'Sahabat Ahmad Bukhari, S.Sy.' || !config.ketuaPelaksana || config.ketuaPelaksana === 'Ketua Pelaksana')
+          {isDirosahUla && (config.ketuaPelaksana === 'Sahabat Ahmad Bukhari, S.Sy.' || !config.ketuaPelaksana || config.ketuaPelaksana === 'Ketua Pelaksana')
             ? 'Aj. Husni Aziz Mubarok, M.Pd.'
             : (config.ketuaPelaksana || 'Ketua Pelaksana')}
         </div>
