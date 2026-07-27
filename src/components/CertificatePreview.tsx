@@ -197,11 +197,9 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
 
         {isDirosahUla && (
           <div 
-            className="absolute left-[680px] top-[620px] w-[360px] h-[28px] text-center text-[12.5px] font-bold z-10 whitespace-nowrap tracking-tight rounded-sm"
+            className="absolute left-[710px] top-[628px] w-[300px] text-center text-[12px] font-bold z-10 whitespace-nowrap tracking-tight"
             style={{ 
-              backgroundColor: '#e8eced',
-              color: '#004349',
-              lineHeight: '28px'
+              color: '#004349'
             }}
           >
             Ketua MDS Rijalul Ansor Kab. Tasikmalaya
