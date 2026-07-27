@@ -193,11 +193,25 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
           Tasikmalaya, {finishedDate}
         </div>
 
+        {config.jenisKegiatan === 'Dirosah Ula' && (
+          <div 
+            className="absolute left-[680px] top-[620px] w-[360px] h-[25px] flex items-center justify-center text-center text-[12.5px] font-bold text-black z-10 whitespace-nowrap tracking-tight"
+            style={{ 
+              background: 'radial-gradient(ellipse at center, #e6ebef 75%, rgba(230,235,239,0) 100%)',
+              textShadow: '0 0 4px #e6ebef, 0 0 8px #e6ebef'
+            }}
+          >
+            Ketua MDS Rijalul Ansor Kab. Tasikmalaya
+          </div>
+        )}
+
         <div
           className="absolute left-[710px] top-[716px] w-[300px] text-center text-[13px] font-semibold leading-[1.05] text-black"
           style={{ textDecoration: 'underline', textDecorationThickness: '1px', textUnderlineOffset: '2px' }}
         >
-          {config.ketuaPelaksana || (config.jenisKegiatan === 'Dirosah Ula' ? 'Aj. Husni Aziz Mubarok, M.Pd.' : 'Ketua Pelaksana')}
+          {config.jenisKegiatan === 'Dirosah Ula' && (config.ketuaPelaksana === 'Sahabat Ahmad Bukhari, S.Sy.' || !config.ketuaPelaksana || config.ketuaPelaksana === 'Ketua Pelaksana')
+            ? 'Aj. Husni Aziz Mubarok, M.Pd.'
+            : (config.ketuaPelaksana || 'Ketua Pelaksana')}
         </div>
 
         {renderSignatureQr(2, 'absolute left-[828px] top-[649px] h-[64px] w-[64px]')}
