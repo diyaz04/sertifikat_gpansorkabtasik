@@ -380,7 +380,7 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
                 : 'TIM INSTRUKTUR CABANG'}
             </p>
             <div className={`flex ${denseLayout ? 'h-[48px]' : 'h-[68px]'} items-center justify-center`}>
-              {signeeQrUrls[1] && (
+              {config.jenisKegiatan !== 'PKL' && signeeQrUrls[1] && (
                 <div className={`${denseLayout ? 'h-[44px] w-[44px]' : 'h-[58px] w-[58px]'} bg-white p-[4px] border border-[#006633] shadow-sm`}>
                   <img src={signeeQrUrls[1]} alt="QR verifikasi tanda tangan tim instruktur" className="h-full w-full block" draggable={false} />
                 </div>
