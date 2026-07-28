@@ -1,0 +1,37 @@
+name: Keep Supabase Active (Every 5 Days)
+
+on:
+  schedule:
+    # Menjalankan workflow setiap 5 hari sekali pada pukul 00:00 UTC
+    - cron: '0 0 */5 * *'
+  workflow_dispatch: # Memungkinkan eksekusi manual via tab Actions di GitHub
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Error: Secrets VITE_SUPABASE_URL atau VITE_SUPABASE_ANON_KEY belum diatur di Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          echo "Mengirim HTTP GET request ke Supabase untuk menjaga database tetap aktif..."
+          
+          # Melakukan query ringan ke tabel certificates menggunakan anon key
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "$SUPABASE_URL/rest/v1/certificates?select=token&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          
+          echo "Status Code dari Supabase: $RESPONSE_CODE"
+          
+          if [ "$RESPONSE_CODE" -eq 200 ]; then
+            echo "✅ Sukses! Database Supabase merespons dengan baik dan tercatat aktif."
+          else
+            echo "⚠️ Peringatan: Supabase merespons dengan status code $RESPONSE_CODE"
+          fi
