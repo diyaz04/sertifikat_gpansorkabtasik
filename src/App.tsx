@@ -111,6 +111,8 @@ const defaultConfig: CertificateConfig = {
     { id: 'sign_1', name: 'Sahabat H. Safei, M.Pd.', title: 'Ketua Pimpinan Cabang', type: 'text' },
     { id: 'sign_2', name: 'Sahabat Ahmad Bukhari, S.Sy.', title: 'Sekretaris Cabang', type: 'text' }
   ],
+  penandatanganPklJabatan: 'TIM INSTRUKTUR WILAYAH',
+  penandatanganPklNama: 'H. Instruktur PKL, M.Pd.',
 };
 
 const romanMonthFromDate = (dateStr?: string) => {
@@ -178,7 +180,9 @@ const HiddenCertificateRenderEngine = memo(function HiddenCertificateRenderEngin
           customBackgroundUrl: config.customBackgroundUrl,
           issuedDateText: pKegiatan ? formatIndonesianDate(pKegiatan.tanggalBerakhir) : config.dateText,
           ketuaPelaksana: pKegiatan ? pKegiatan.ketuaPelaksana : undefined,
-          jenisKegiatan: pKegiatan ? (pKegiatan.jenisKegiatan || 'PKD') : config.jenisKegiatan
+          jenisKegiatan: pKegiatan ? (pKegiatan.jenisKegiatan || 'PKD') : config.jenisKegiatan,
+          penandatanganPklNama: pKegiatan ? (pKegiatan.penandatanganPklNama || config.penandatanganPklNama) : config.penandatanganPklNama,
+          penandatanganPklJabatan: pKegiatan ? (pKegiatan.penandatanganPklJabatan || config.penandatanganPklJabatan) : config.penandatanganPklJabatan
         };
         return (
           <div key={p.id}>
@@ -609,6 +613,8 @@ export default function App() {
         tanggalMulai: kegiatanFormData.tanggalMulai || k.tanggalMulai,
         tanggalBerakhir: kegiatanFormData.tanggalBerakhir || k.tanggalBerakhir,
         ketuaPelaksana: kegiatanFormData.ketuaPelaksana || k.ketuaPelaksana,
+        penandatanganPklNama: kegiatanFormData.penandatanganPklNama !== undefined ? kegiatanFormData.penandatanganPklNama : k.penandatanganPklNama,
+        penandatanganPklJabatan: kegiatanFormData.penandatanganPklJabatan !== undefined ? kegiatanFormData.penandatanganPklJabatan : k.penandatanganPklJabatan,
         generatedAt: undefined,
       } : k));
       triggerNotification('success', 'Data kegiatan berhasil diperbarui');
@@ -622,6 +628,8 @@ export default function App() {
         tanggalMulai: kegiatanFormData.tanggalMulai || new Date().toISOString().slice(0, 10),
         tanggalBerakhir: kegiatanFormData.tanggalBerakhir || new Date().toISOString().slice(0, 10),
         ketuaPelaksana: kegiatanFormData.ketuaPelaksana || (kegiatanFormData.jenisKegiatan === 'Dirosah Ula' ? 'Aj. Husni Aziz Mubarok, M.Pd.' : 'Sahabat Ahmad Bukhari, S.Sy.'),
+        penandatanganPklNama: kegiatanFormData.penandatanganPklNama || (kegiatanFormData.jenisKegiatan === 'PKL' ? (config.penandatanganPklNama || 'H. Instruktur PKL, M.Pd.') : undefined),
+        penandatanganPklJabatan: kegiatanFormData.penandatanganPklJabatan || (kegiatanFormData.jenisKegiatan === 'PKL' ? (config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH') : undefined),
         materi: [...defaultMateri] // Copy default syllabus to start
       };
       setKegiatanList(prev => [...prev, newKeg]);
@@ -632,7 +640,7 @@ export default function App() {
 
     setIsKegiatanFormOpen(false);
     setEditingKegiatan(null);
-    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.' });
+    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.', penandatanganPklNama: '', penandatanganPklJabatan: '' });
   };
 
   const startEditKegiatan = (k: Kegiatan) => {
@@ -643,7 +651,9 @@ export default function App() {
       tempatPelaksanaan: k.tempatPelaksanaan,
       tanggalMulai: k.tanggalMulai,
       tanggalBerakhir: k.tanggalBerakhir,
-      ketuaPelaksana: k.ketuaPelaksana
+      ketuaPelaksana: k.ketuaPelaksana,
+      penandatanganPklNama: k.penandatanganPklNama || (k.jenisKegiatan === 'PKL' ? config.penandatanganPklNama : undefined),
+      penandatanganPklJabatan: k.penandatanganPklJabatan || (k.jenisKegiatan === 'PKL' ? config.penandatanganPklJabatan : undefined),
     });
     setIsKegiatanFormOpen(true);
   };
@@ -919,6 +929,8 @@ export default function App() {
                   { n: kegiatan.ketuaPelaksana, t: kegiatan.jenisKegiatan === 'Dirosah Ula' ? 'Ketua MDS Rijalul Ansor Kab. Tasikmalaya' : 'Ketua Pelaksana' },
                 ],
                 jenisKegiatan: kegiatan.jenisKegiatan || 'PKD',
+                penandatanganPklNama: kegiatan.penandatanganPklNama || config.penandatanganPklNama,
+                penandatanganPklJabatan: kegiatan.penandatanganPklJabatan || config.penandatanganPklJabatan,
               },
             },
           }));
@@ -1373,7 +1385,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setEditingKegiatan(null);
-                    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.' });
+                    setKegiatanFormData({ jenisKegiatan: 'PKD', judulKegiatan: '', tempatPelaksanaan: '', tanggalMulai: '', tanggalBerakhir: '', ketuaPelaksana: 'Sahabat Ahmad Bukhari, S.Sy.', penandatanganPklNama: '', penandatanganPklJabatan: '' });
                     setIsKegiatanFormOpen(true);
                   }}
                   type="button"
@@ -1433,6 +1445,12 @@ export default function App() {
                             <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span className="font-medium text-slate-600">{k.jenisKegiatan === 'Dirosah Ula' ? 'Ketua MDS Rijalul Ansor:' : 'Ketua Pelaksana:'} <strong className="text-slate-800">{k.ketuaPelaksana}</strong></span>
                           </div>
+                          {k.jenisKegiatan === 'PKL' && (
+                            <div className="flex items-center gap-1.5 col-span-2 mt-0.5">
+                              <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                              <span className="font-medium text-slate-600">Instruktur Halaman 2: <strong className="text-slate-800">{k.penandatanganPklNama || config.penandatanganPklNama || 'H. Instruktur PKL, M.Pd.'}</strong> ({k.penandatanganPklJabatan || config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH'})</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1988,6 +2006,51 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
+              {/* Custom PKL Page 2 Signee Config */}
+              <div className="p-4 border border-amber-200/80 bg-amber-50/30 rounded-xl space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="bg-amber-100 text-amber-900 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">
+                    Khusus PKL — Penandatangan Halaman 2
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Khusus untuk sertifikat Pelatihan Kepemimpinan Lanjutan (PKL), penandatangan halaman belakang (daftar materi) menggantikan posisi Tim Instruktur Cabang.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Jabatan Penandatangan (Atas)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH'}
+                      onChange={(e) => setConfig({ ...config, penandatanganPklJabatan: e.target.value })}
+                      placeholder="Contoh: TIM INSTRUKTUR WILAYAH"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-[#006633] font-black uppercase focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Nama Lengkap Penandatangan (Bawah)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganPklNama || ''}
+                      onChange={(e) => setConfig({ ...config, penandatanganPklNama: e.target.value })}
+                      placeholder="Contoh: H. Ahmad Zaki, M.Pd."
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 font-bold focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-500 italic bg-white/60 p-2.5 rounded-lg border border-amber-100/60">
+                  💡 Catatan: Pada kegiatan PKD dan Dirosah Ula, sistem tetap menggunakan standar 'Tim Instruktur Cabang / Iman Nurjaman, M.Pd'. Anda juga bisa mengatur nama & jabatan ini secara spesifik per kegiatan saat menambah atau mengedit kegiatan PKL di menu 1. Kegiatan.
+                </div>
+              </div>
             </div>
           )}
 
@@ -2290,7 +2353,9 @@ export default function App() {
                     setKegiatanFormData({
                       ...kegiatanFormData,
                       jenisKegiatan: nextJenis,
-                      ketuaPelaksana: nextKetua
+                      ketuaPelaksana: nextKetua,
+                      penandatanganPklJabatan: nextJenis === 'PKL' ? (kegiatanFormData.penandatanganPklJabatan || config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH') : kegiatanFormData.penandatanganPklJabatan,
+                      penandatanganPklNama: nextJenis === 'PKL' ? (kegiatanFormData.penandatanganPklNama || config.penandatanganPklNama || '') : kegiatanFormData.penandatanganPklNama,
                     });
                   }}
                   className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-bold text-[#006633] uppercase"
@@ -2362,6 +2427,48 @@ export default function App() {
                   className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-semibold"
                 />
               </div>
+
+              {kegiatanFormData.jenisKegiatan === 'PKL' && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-amber-200/50 pb-2">
+                    <div className="flex items-center gap-2 text-amber-900">
+                      <Award className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-xs font-black uppercase tracking-wider">Khusus PKL: TTD Halaman 2</span>
+                    </div>
+                    <span className="bg-amber-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase">PKL</span>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 font-sans">
+                      Jabatan Penandatangan (Atas) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required={kegiatanFormData.jenisKegiatan === 'PKL'}
+                      value={kegiatanFormData.penandatanganPklJabatan || ''}
+                      onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, penandatanganPklJabatan: e.target.value })}
+                      placeholder="Contoh: TIM INSTRUKTUR WILAYAH"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-bold uppercase text-[#006633]"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">Menggantikan posisi 'Tim Instruktur Cabang' pada sertifikat halaman 2.</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 font-sans">
+                      Nama Lengkap Penandatangan (Bawah) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required={kegiatanFormData.jenisKegiatan === 'PKL'}
+                      value={kegiatanFormData.penandatanganPklNama || ''}
+                      onChange={(e) => setKegiatanFormData({ ...kegiatanFormData, penandatanganPklNama: e.target.value })}
+                      placeholder="Contoh: H. Ahmad Zaki, M.Pd."
+                      className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] font-bold text-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">Menggantikan 'Iman Nurjaman, M.Pd' pada sertifikat halaman 2.</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                 <button

@@ -39,6 +39,8 @@ export interface Kegiatan {
   ketuaPelaksana: string; // Ketua Pelaksana kegiatan
   materi: MateriItem[]; // Daftar materi khusus kegiatan ini
   generatedAt?: string; // Waktu sertifikat kegiatan disimpan/digenerate
+  penandatanganPklNama?: string; // Nama penandatangan khusus halaman 2 PKL
+  penandatanganPklJabatan?: string; // Jabatan penandatangan khusus halaman 2 PKL
 }
 
 export interface CertificateConfig {
@@ -54,6 +56,8 @@ export interface CertificateConfig {
   ketuaPelaksana?: string; // Nama ketua pelaksana untuk template depan
   lastCertificateSequence?: number; // Nomor urut global lintas kegiatan
   jenisKegiatan?: JenisKegiatan; // Untuk memilih template gambar (PKD / PKL / Dirosah Ula)
+  penandatanganPklNama?: string; // Nama penandatangan khusus halaman 2 PKL
+  penandatanganPklJabatan?: string; // Jabatan penandatangan khusus halaman 2 PKL
 }
 
 export interface VerificationPayload {
@@ -67,6 +71,8 @@ export interface VerificationPayload {
     materi: { t: string; h: number }[]; // Minimalized for smaller URL size
     signees: { n: string; t: string }[];
     jenisKegiatan?: JenisKegiatan;
+    penandatanganPklNama?: string;
+    penandatanganPklJabatan?: string;
   };
 }
 

@@ -375,7 +375,9 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
               Disahkan di Tasikmalaya,
             </p>
             <p className="text-[10px] text-[#006633] uppercase font-black tracking-wider leading-tight">
-              TIM INSTRUKTUR CABANG
+              {config.jenisKegiatan === 'PKL'
+                ? (config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH').toUpperCase()
+                : 'TIM INSTRUKTUR CABANG'}
             </p>
             <div className={`flex ${denseLayout ? 'h-[48px]' : 'h-[68px]'} items-center justify-center`}>
               {signeeQrUrls[1] && (
@@ -385,10 +387,14 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
               )}
             </div>
             <p className="text-[12px] font-extrabold text-slate-800 border-b border-slate-300 pb-0.5 w-full">
-              Iman Nurjaman, M.Pd
+              {config.jenisKegiatan === 'PKL'
+                ? (config.penandatanganPklNama || 'H. Instruktur PKL, M.Pd.')
+                : 'Iman Nurjaman, M.Pd'}
             </p>
             <p className="text-[8px] font-mono text-slate-400 tracking-wider">
-              Bidang Kaderisasi
+              {config.jenisKegiatan === 'PKL'
+                ? (config.penandatanganPklJabatan ? 'Instruktur Kaderisasi' : 'Bidang Kaderisasi')
+                : 'Bidang Kaderisasi'}
             </p>
           </div>
         </div>
@@ -424,6 +430,8 @@ function arePropsEqual(prev: CertificatePreviewProps, next: CertificatePreviewPr
     prev.config.ketuaPelaksana === next.config.ketuaPelaksana &&
     prev.config.customBackgroundUrl === next.config.customBackgroundUrl &&
     prev.config.jenisKegiatan === next.config.jenisKegiatan &&
+    prev.config.penandatanganPklNama === next.config.penandatanganPklNama &&
+    prev.config.penandatanganPklJabatan === next.config.penandatanganPklJabatan &&
     prev.config.materi === next.config.materi &&
     prev.config.signees === next.config.signees
   );
