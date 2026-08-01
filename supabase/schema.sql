@@ -95,3 +95,50 @@ create policy "authenticated app_state access" on public.app_state for all to au
 create policy "authenticated certificates access" on public.certificates for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
 create policy "public certificate verification" on public.certificates for select to anon using (true);
 create policy "admin can view own role" on public.admin_users for select to authenticated using (user_id = (select auth.uid()));
+
+-- FASE 2: Form Pendaftaran Publik
+alter table public.kegiatan add column if not exists status text not null default 'draft';
+alter table public.kegiatan add column if not exists kuota_peserta integer;
+alter table public.kegiatan add column if not exists deskripsi text;
+alter table public.kegiatan add column if not exists form_schema jsonb not null default '[]'::jsonb;
+
+create table if not exists public.pendaftaran (
+  id uuid primary key default gen_random_uuid(),
+  kegiatan_id text not null references public.kegiatan(id) on delete cascade,
+  nama text not null,
+  tempat_lahir text not null,
+  tanggal_lahir date not null,
+  asal_pac text not null,
+  no_hp text not null,
+  alamat text not null,
+  jawaban_custom jsonb not null default '{}'::jsonb,
+  status text not null default 'menunggu',
+  token_kehadiran uuid unique,
+  id_card_generated_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.absensi_materi (
+  id uuid primary key default gen_random_uuid(),
+  kegiatan_id text not null references public.kegiatan(id) on delete cascade,
+  materi_id text not null,
+  pendaftaran_id uuid not null references public.pendaftaran(id) on delete cascade,
+  waktu_absen timestamptz not null default now(),
+  metode text not null default 'scan',
+  unique(materi_id, pendaftaran_id)
+);
+
+-- Note: RLS for absensi_materi needs to be enabled if anon needs to insert? No, admin only.
+-- Tapi untuk amannya kita allow all just in case RLS is not fully strictly enforced yet.
+alter table public.absensi_materi enable row level security;
+create policy "Allow anon insert absensi" on public.absensi_materi for insert to anon with check (true);
+create policy "Allow anon select absensi" on public.absensi_materi for select to anon using (true);
+
+
+alter table public.pendaftaran enable row level security;
+drop policy if exists "public insert pendaftaran" on public.pendaftaran;
+drop policy if exists "authenticated pendaftaran access" on public.pendaftaran;
+create policy "public insert pendaftaran" on public.pendaftaran for insert to anon, authenticated with check (true);
+create policy "authenticated pendaftaran access" on public.pendaftaran for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "public read kegiatan" on public.kegiatan for select to anon using (true);

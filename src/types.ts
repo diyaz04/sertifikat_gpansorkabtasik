@@ -17,6 +17,11 @@ export interface MateriItem {
   title: string;
   hours: number; // Jam Pelajaran (JP)
   instructor?: string; // Pemateri / Instruktur
+  tanggal?: string; // YYYY-MM-DD
+  jamMulai?: string; // HH:MM
+  jamSelesai?: string; // HH:MM
+  ruangan?: string;
+  aktif?: boolean; // Tanda materi sedang menerima scan absen
 }
 
 export interface Signee {
@@ -28,6 +33,15 @@ export interface Signee {
 }
 
 export type JenisKegiatan = 'PKD' | 'PKL' | 'Dirosah Ula';
+export type KegiatanStatus = 'draft' | 'dibuka' | 'ditutup' | 'selesai';
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select' | 'radio' | 'checkbox' | 'file';
+  required: boolean;
+  options?: string[]; // Untuk select/radio
+}
 
 export interface Kegiatan {
   id: string;
@@ -41,6 +55,47 @@ export interface Kegiatan {
   generatedAt?: string; // Waktu sertifikat kegiatan disimpan/digenerate
   penandatanganPklNama?: string; // Nama penandatangan khusus halaman 2 PKL
   penandatanganPklJabatan?: string; // Jabatan penandatangan khusus halaman 2 PKL
+  // FASE 2: Form Pendaftaran
+  status?: KegiatanStatus;
+  kuotaPeserta?: number;
+  deskripsi?: string;
+  formSchema?: FormField[];
+  syaratKelulusan?: number; // Persentase kehadiran minimal (default 80)
+}
+
+export type PendaftaranStatus = 'daftar' | 'checkin' | 'fiks' | 'ditolak';
+
+export interface Pendaftaran {
+  id: string;
+  kegiatanId: string;
+  
+  // Field Bawaan Wajib
+  nama: string;
+  tempatLahir: string;
+  tanggalLahir: string;
+  asalPac: string;
+  noHp: string;
+  alamat: string;
+  
+  // Field Dinamis (dari formSchema)
+  jawabanCustom: Record<string, any>;
+  
+  status: PendaftaranStatus;
+  statusKelulusan?: 'Lulus' | 'Tidak Lulus' | 'Belum Ditentukan';
+  predikat?: string;
+  tokenKehadiran?: string;
+  idCardGeneratedAt?: string;
+  createdAt: string;
+}
+
+export interface AbsensiMateri {
+  id: string;
+  kegiatanId: string;
+  materiId: string;
+  pendaftaranId: string;
+  waktuAbsen: string;
+  metode: 'scan' | 'manual';
+  pendaftar?: Pendaftaran; // Untuk menampilkan nama di UI
 }
 
 export interface CertificateConfig {
@@ -58,6 +113,15 @@ export interface CertificateConfig {
   jenisKegiatan?: JenisKegiatan; // Untuk memilih template gambar (PKD / PKL / Dirosah Ula)
   penandatanganPklNama?: string; // Nama penandatangan khusus halaman 2 PKL
   penandatanganPklJabatan?: string; // Jabatan penandatangan khusus halaman 2 PKL
+}
+
+export interface IdCardConfig {
+  templateUrl?: string; // URL custom template id card
+  
+  // Custom Coordinates (x, y) - opsional jika ingin di-override
+  nameCoords?: { x: number; y: number; fontSize?: number; align?: 'left'|'center'|'right' };
+  pacCoords?: { x: number; y: number; fontSize?: number; align?: 'left'|'center'|'right' };
+  qrCoords?: { x: number; y: number; size?: number };
 }
 
 export interface VerificationPayload {
@@ -85,4 +149,13 @@ export interface IssuedCertificate {
   payload: VerificationPayload;
   issuedAt: string;
   revokedAt?: string;
+}
+
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'instruktur';
+  permissions: string[];
+  createdAt?: string;
 }

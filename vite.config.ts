@@ -2,10 +2,47 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(), 
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['logo-ansor.png'],
+        manifest: {
+          name: 'SIMak Ansor Tasikmalaya',
+          short_name: 'SIMak Ansor',
+          description: 'Sistem Informasi Manajemen Kaderisasi Ansor Tasikmalaya',
+          theme_color: '#006633',
+          background_color: '#ffffff',
+          display: 'standalone',
+          icons: [
+            {
+              src: '/src/assets/logo-ansor.png',
+              sizes: '192x192',
+              type: 'image/png'
+            },
+            {
+              src: '/src/assets/logo-ansor.png',
+              sizes: '512x512',
+              type: 'image/png'
+            },
+            {
+              src: '/src/assets/logo-ansor.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable'
+            }
+          ]
+        },
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5000000
+        }
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

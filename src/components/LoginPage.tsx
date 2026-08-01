@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
-import { signInWithPassword } from '../supabaseDatabase';
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck, ArrowLeft, UserPlus, LogIn, User } from 'lucide-react';
+import { signInWithPassword, registerSelf } from '../supabaseDatabase';
 import { AnsorLogoSvg } from './CertificatePreview';
 
 interface LoginPageProps {
@@ -8,10 +8,12 @@ interface LoginPageProps {
   onBack?: () => void;
 }
 
-export default function LoginPage({ onSuccess }: LoginPageProps) {
+export default function LoginPage({ onSuccess, onBack }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,13 +21,27 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
     event.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
-      await signInWithPassword(email, password);
-      onSuccess();
+      if (isRegisterMode) {
+        if (!name.trim()) {
+          throw new Error('Nama lengkap wajib diisi');
+        }
+        await registerSelf(email, password, name);
+        onSuccess();
+      } else {
+        await signInWithPassword(email, password);
+        onSuccess();
+      }
     } catch (err: any) {
-      setError(err.message === 'Invalid login credentials'
-        ? 'Email atau kata sandi salah.'
-        : (err.message || 'Gagal masuk. Silakan coba kembali.'));
+      console.error(err);
+      if (err.message === 'Invalid login credentials') {
+        setError('Email atau kata sandi salah. Silakan coba lagi.');
+      } else if (err.message.includes('already registered')) {
+        setError('Email ini sudah terdaftar. Silakan login.');
+      } else {
+        setError(err.message || 'Terjadi kesalahan saat masuk');
+      }
     } finally {
       setLoading(false);
     }
@@ -46,8 +62,19 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           <div className="bg-white px-6 pt-8 pb-6 sm:px-8 sm:pt-10 sm:pb-7 text-center border-b border-slate-100 relative">
             <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#006633] via-[#007a3d] to-amber-500" />
             
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#006633] text-white shadow-lg shadow-[#006633]/25 mb-4 transform hover:scale-105 transition-transform duration-300">
-              <AnsorLogoSvg className="h-10 w-10 text-white" />
+            {onBack && (
+              <button 
+                onClick={onBack}
+                type="button"
+                className="absolute top-4 left-4 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+                title="Kembali ke Halaman Awal"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            
+            <div className="mx-auto flex items-center justify-center mb-4 transform hover:scale-105 transition-transform duration-300">
+              <AnsorLogoSvg className="h-16 w-16 text-[#006633]" />
             </div>
             
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ebfef4] border border-[#006633]/20 text-[#006633] text-[10px] sm:text-[11px] font-bold tracking-wide uppercase mb-3">
@@ -56,10 +83,10 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
             </div>
 
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 uppercase leading-snug">
-              PORTAL SERTIFIKAT KADERISASI
+              {isRegisterMode ? 'DAFTAR AKUN BARU' : 'PORTAL KADERISASI'}
             </h1>
             <p className="mt-1 text-xs sm:text-sm font-extrabold text-[#006633] uppercase tracking-wider">
-              GP ANSOR KAB. TASIKMALAYA
+              {isRegisterMode ? 'Instruktur & Admin' : 'SIMAK ANSOR TASIKMALAYA'}
             </p>
           </div>
 
@@ -73,6 +100,25 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
             )}
 
             <div className="space-y-4">
+              {isRegisterMode && (
+                <div className="space-y-1.5 relative">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider ml-1">Nama Lengkap</label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-[#006633] transition-colors">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      className="block w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] transition-all"
+                      placeholder="Masukkan nama lengkap"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required={isRegisterMode}
+                    />
+                  </div>
+                </div>
+              )}
+
               <label className="block space-y-1.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
                   Alamat Email <span className="text-rose-500">*</span>
@@ -122,20 +168,40 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
 
             <div className="pt-2">
               <button
-                disabled={loading}
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#006633] px-6 py-3.5 text-xs sm:text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-[#006633]/25 transition-all hover:bg-[#005229] hover:shadow-xl active:scale-[0.99] disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed cursor-pointer"
+                disabled={loading}
+                className="group relative w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-white bg-[#006633] hover:bg-[#007a3d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#006633] shadow-lg shadow-[#006633]/30 disabled:opacity-70 disabled:cursor-not-allowed transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4 text-amber-300" />}
-                {loading ? 'Memverifikasi Akses...' : 'Masuk Ke Portal'}
+                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin relative z-10" />
+                ) : (
+                  <span className="relative z-10 flex items-center gap-2">
+                    {isRegisterMode ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
+                    {isRegisterMode ? 'Daftar Akun' : 'Masuk ke Sistem'}
+                  </span>
+                )}
               </button>
+              
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(!isRegisterMode);
+                    setError('');
+                  }}
+                  className="text-xs font-bold text-[#006633] hover:text-[#007a3d] underline decoration-transparent hover:decoration-[#006633] transition-all"
+                >
+                  {isRegisterMode ? 'Sudah punya akun? Masuk di sini' : 'Belum punya akun? Daftar mandiri'}
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 pt-4 border-t border-slate-100 text-center">
               <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                Sistem Manajemen Dokumen & Verifikasi Digital Resmi
+                Sistem Informasi Manajemen Kaderisasi (SIMak) Resmi
                 <br />
-                <span className="font-bold text-slate-600">Pimpinan Cabang GP Ansor Kabupaten Tasikmalaya</span>
+                <span className="font-bold text-slate-600">Pimpinan Cabang GP Ansor Tasikmalaya</span>
               </p>
             </div>
           </form>

@@ -1,12 +1,25 @@
 import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
-import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan, IssuedCertificate } from './types';
+import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan, IssuedCertificate, IdCardConfig, AppUser } from './types';
 import { formatIndonesianDate, formatIndonesianDateRange } from './utils';
 import CertificatePreview, { AnsorLogoSvg } from './components/CertificatePreview';
 import GoogleSheetsImporter from './components/GoogleSheetsImporter';
 import SignatureCanvas from './components/SignatureCanvas';
 import VerificationPortal from './components/VerificationPortal';
+import IdCardPeserta from './components/IdCardPeserta';
+import JadwalMateri from './components/JadwalMateri';
+import AbsensiScan from './components/AbsensiScan';
+import RekapKelulusan from './components/RekapKelulusan';
+import CheckInPeserta from './components/CheckInPeserta';
+import PendaftaranPeserta from './components/PendaftaranPeserta';
+import DaftarKaderisasi from './components/DaftarKaderisasi';
+import RegistrationPortal from './components/RegistrationPortal';
+import MonitorPortal from './components/MonitorPortal';
+import LandingPage from './components/LandingPage';
+import KaderisasiBreadcrumb from './components/ui/KaderisasiBreadcrumb';
+import ManajemenAkun from './components/ManajemenAkun';
+
 import LoginPage from './components/LoginPage';
-import { getAuthSession, isSupabaseConfigured, issueCertificates, loadSupabaseDatabase, saveSupabaseDatabase, signOut, SupabaseDbPayload } from './supabaseDatabase';
+import { getAuthSession, isSupabaseConfigured, issueCertificates, loadSupabaseDatabase, saveSupabaseDatabase, signOut, SupabaseDbPayload, getMyProfile } from './supabaseDatabase';
 import { 
   Users, 
   BookOpen, 
@@ -18,10 +31,7 @@ import {
   Plus, 
   Trash2, 
   Download, 
-  FileDown, 
-  Award, 
-  Edit, 
-  ChevronRight, 
+  Upload, 
   Save, 
   Share2,
   CheckCircle2,
@@ -30,7 +40,15 @@ import {
   Calendar,
   MapPin,
   UserCheck,
-  LogOut
+  LogOut,
+  ShieldCheck,
+  Image as ImageIcon,
+  XCircle,
+  Award,
+  Edit,
+  ChevronRight,
+  FileDown,
+  ShieldAlert
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -197,8 +215,24 @@ const HiddenCertificateRenderEngine = memo(function HiddenCertificateRenderEngin
 
 export default function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(null);
-  const [appScreen, setAppScreen] = useState<'login' | 'dashboard'>('login');
+  const [registrationMode, setRegistrationMode] = useState<boolean>(false);
+  const [monitorId, setMonitorId] = useState<string | null>(null);
+  const [appScreen, setAppScreen] = useState<'landing' | 'login' | 'dashboard'>(() => {
+    return (localStorage.getItem('ansor_app_screen') as any) || 'landing';
+  });
   const [hasSession, setHasSession] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (hasSession && isSupabaseConfigured) {
+      getMyProfile().then(setCurrentUser).catch(console.error);
+    } else {
+      setCurrentUser(null);
+    }
+  }, [hasSession]);
+
+
 
   // Parse URL search parameters on boot to detect QR code scan
   useEffect(() => {
@@ -206,6 +240,14 @@ export default function App() {
     const token = params.get('verify');
     if (token) {
       setVerifyToken(token);
+    }
+    const daftar = params.get('daftar');
+    if (daftar) {
+      setRegistrationMode(true);
+    }
+    const monitor = params.get('monitor');
+    if (monitor) {
+      setMonitorId(monitor);
     }
   }, []);
 
@@ -235,6 +277,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultConfig;
   });
 
+  const [idCardConfig, setIdCardConfig] = useState<IdCardConfig>(() => {
+    const saved = localStorage.getItem('ansor_idcard_config');
+    return saved ? JSON.parse(saved) : {};
+  });
+
   const [activeParticipantId, setActiveParticipantId] = useState<string>(() => {
     const saved = localStorage.getItem('ansor_active_id');
     if (saved) return saved;
@@ -243,7 +290,38 @@ export default function App() {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'kegiatan' | 'kader' | 'materi' | 'generate' | 'signatures' | 'config' | 'riwayat'>('kegiatan');
+  const [activeTab, setActiveTab] = useState<'kaderisasi' | 'pendaftaran' | 'checkin' | 'idcard' | 'jadwal' | 'absensi' | 'rekap' | 'sertifikat' | 'akun'>(() => {
+    return (localStorage.getItem('ansor_active_tab') as any) || 'kaderisasi';
+  });
+
+  const ALL_TABS = useMemo(() => [
+    { id: 'kaderisasi', label: 'Daftar Kaderisasi', icon: Calendar },
+    { id: 'pendaftaran', label: 'Pendaftaran & Peserta', icon: Users },
+    { id: 'checkin', label: 'Check-in Peserta', icon: UserCheck },
+    { id: 'idcard', label: 'ID Card & QR', icon: MapPin },
+    { id: 'jadwal', label: 'Jadwal Materi', icon: Calendar },
+    { id: 'absensi', label: 'Absensi Materi', icon: BookOpen },
+    { id: 'rekap', label: 'Rekap Kelulusan', icon: CheckCircle2 },
+    { id: 'sertifikat', label: 'Sertifikat Kelulusan', icon: Award },
+    { id: 'akun', label: 'Manajemen Akun', icon: ShieldCheck },
+  ] as const, []);
+
+  const hasAccess = useCallback((tabId: string) => {
+    if (!isSupabaseConfigured) return true; // Lokal mode open all
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin' || currentUser.permissions.includes('all')) return true;
+    if (tabId === 'akun') return currentUser.role === 'admin';
+    return currentUser.permissions.includes(tabId);
+  }, [currentUser, isSupabaseConfigured]);
+
+  const availableTabsList = useMemo(() => ALL_TABS.filter(t => hasAccess(t.id)), [ALL_TABS, hasAccess]);
+
+  useEffect(() => {
+    if (availableTabsList.length > 0 && !availableTabsList.find(t => t.id === activeTab)) {
+      setActiveTab(availableTabsList[0].id as any);
+    }
+  }, [availableTabsList, activeTab]);
+  const [sertifikatTab, setSertifikatTab] = useState<'kegiatan' | 'kader' | 'materi' | 'generate' | 'signatures' | 'config' | 'riwayat'>('kegiatan');
   // Signature Drawing overlay state
   const [drawingSigneeId, setDrawingSigneeId] = useState<string | null>(null);
 
@@ -305,12 +383,18 @@ export default function App() {
   }, [participants, config.lastCertificateSequence]);
 
   useEffect(() => {
-    localStorage.setItem('ansor_active_id', activeParticipantId);
+    localStorage.setItem('ansor_kegiatan_list', JSON.stringify(kegiatanList));
+  }, [kegiatanList]);
+
+  useEffect(() => {
+    if (activeParticipantId) {
+      localStorage.setItem('ansor_active_id', activeParticipantId);
+    }
   }, [activeParticipantId]);
 
   useEffect(() => {
-    localStorage.setItem('ansor_kegiatan_list', JSON.stringify(kegiatanList));
-  }, [kegiatanList]);
+    localStorage.setItem('ansor_idcard_config', JSON.stringify(idCardConfig));
+  }, [idCardConfig]);
 
   useEffect(() => {
     localStorage.setItem('ansor_selected_kegiatan_id', selectedKegiatanId);
@@ -320,6 +404,14 @@ export default function App() {
     setSelectedIds(new Set());
     setSearchQuery('');
   }, [selectedKegiatanId]);
+
+  useEffect(() => {
+    localStorage.setItem('ansor_app_screen', appScreen);
+  }, [appScreen]);
+
+  useEffect(() => {
+    localStorage.setItem('ansor_active_tab', activeTab);
+  }, [activeTab]);
 
   // Derived/computed active objects
   const activeKegiatan = kegiatanList.find(k => k.id === selectedKegiatanId) || kegiatanList[0] || defaultKegiatan[0];
@@ -336,11 +428,13 @@ export default function App() {
     nextKegiatanList = kegiatanList,
     nextParticipants = participants,
     nextConfig = config,
-    nextSelectedKegiatanId = selectedKegiatanId
+    nextSelectedKegiatanId = selectedKegiatanId,
+    nextIdCardConfig = idCardConfig
   ): SupabaseDbPayload => ({
     kegiatanList: nextKegiatanList,
     participants: nextParticipants,
     config: nextConfig,
+    idCardConfig: nextIdCardConfig,
     selectedKegiatanId: nextSelectedKegiatanId,
     syncedAt: new Date().toISOString(),
   });
@@ -617,7 +711,7 @@ export default function App() {
         penandatanganPklJabatan: kegiatanFormData.penandatanganPklJabatan !== undefined ? kegiatanFormData.penandatanganPklJabatan : k.penandatanganPklJabatan,
         generatedAt: undefined,
       } : k));
-      triggerNotification('success', 'Data kegiatan berhasil diperbarui');
+      triggerNotification('success', 'Data kaderisasi berhasil diperbarui');
     } else {
       // Create mode
       const newKeg: Kegiatan = {
@@ -635,7 +729,7 @@ export default function App() {
       setKegiatanList(prev => [...prev, newKeg]);
       setSelectedKegiatanId(newKeg.id);
       setActiveTab('kader');
-      triggerNotification('success', 'Kegiatan baru berhasil ditambahkan! Silakan lanjut impor data kader.');
+      triggerNotification('success', 'Kaderisasi baru berhasil ditambahkan! Silakan lanjut impor data kader.');
     }
 
     setIsKegiatanFormOpen(false);
@@ -1087,6 +1181,8 @@ export default function App() {
     return participants.filter(p => p.kegiatanId === selectedKegiatanId);
   }, [participants, selectedKegiatanId]);
 
+  const deferredActiveKegiatanParticipants = useDeferredValue(activeKegiatanParticipants);
+
   const generatedKegiatanList = useMemo(() => {
     return kegiatanList.filter(k => k.generatedAt);
   }, [kegiatanList]);
@@ -1105,6 +1201,18 @@ export default function App() {
     );
   }
 
+  if (registrationMode) {
+    return <RegistrationPortal />;
+  }
+
+  if (monitorId) {
+    return <MonitorPortal />;
+  }
+
+  if (appScreen === 'landing') {
+    return <LandingPage onEnter={() => setAppScreen('login')} />;
+  }
+
   if (appScreen === 'login') {
     return (
       <LoginPage
@@ -1112,6 +1220,7 @@ export default function App() {
           setHasSession(true);
           setAppScreen('dashboard');
         }}
+        onBack={() => setAppScreen('landing')}
       />
     );
   }
@@ -1119,113 +1228,58 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen bg-slate-50/50 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       
-      {/* SIDEBAR NAV (DESKTOP) */}
-      <div className="hidden lg:flex w-64 bg-white text-slate-900 flex-col border-r border-slate-200/80 shadow-2xs shrink-0 z-10">
-        <div className="p-6 border-b border-slate-100">
+      {/* MOBILE OVERLAY */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR NAV */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 flex w-64 bg-white text-slate-900 flex-col border-r border-slate-200/80 shadow-2xl lg:shadow-2xs shrink-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#006633] text-white shadow-sm shrink-0">
               <AnsorLogoSvg className="w-6 h-6 text-white" />
             </div>
             <div className="leading-tight">
-              <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">GP ANSOR</h1>
-              <p className="text-[10px] text-[#006633] font-extrabold uppercase tracking-widest">KAB. TASIKMALAYA</p>
+              <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">SIMak</h1>
+              <p className="text-[10px] text-[#006633] font-extrabold uppercase tracking-widest">Ansor Tasikmalaya</p>
             </div>
           </div>
+          <button 
+            className="lg:hidden p-1 text-slate-400 hover:text-slate-700" 
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <XCircle className="w-6 h-6" />
+          </button>
         </div>
         
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">Alur Kerja Pembuatan</div>
+          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">MENU SIMAK</div>
           
-          <button 
-            type="button"
-            onClick={() => setActiveTab('kegiatan')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'kegiatan' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Calendar className={`w-4 h-4 shrink-0 ${activeTab === 'kegiatan' ? 'text-white' : 'text-[#006633]'}`} />
-            1. Tambah Kegiatan ({kegiatanList.length})
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('kader')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'kader' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Users className={`w-4 h-4 shrink-0 ${activeTab === 'kader' ? 'text-white' : 'text-[#006633]'}`} />
-            2. Import Data ({activeKegiatanParticipants.length})
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('materi')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'materi' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <BookOpen className={`w-4 h-4 shrink-0 ${activeTab === 'materi' ? 'text-white' : 'text-[#006633]'}`} />
-            3. Isi Materi
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('generate')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'generate' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <FileDown className={`w-4 h-4 shrink-0 ${activeTab === 'generate' ? 'text-white' : 'text-[#006633]'}`} />
-            4. Generate
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('signatures')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'signatures' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <PenTool className={`w-4 h-4 shrink-0 ${activeTab === 'signatures' ? 'text-white' : 'text-[#006633]'}`} />
-            Tanda Tangan
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('config')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'config' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'config' ? 'text-white' : 'text-[#006633]'}`} />
-            Kop & Desain
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => setActiveTab('riwayat')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-              activeTab === 'riwayat' 
-                ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Award className={`w-4 h-4 shrink-0 ${activeTab === 'riwayat' ? 'text-white' : 'text-[#006633]'}`} />
-            5. Data Sertifikat ({generatedKegiatanList.length})
-          </button>
+          {availableTabsList.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button 
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
+                  activeTab === tab.id 
+                    ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${activeTab === tab.id ? 'text-white' : 'text-[#006633]'}`} />
+                {tab.label}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
@@ -1243,11 +1297,17 @@ export default function App() {
       <div className="flex-1 flex flex-col overflow-hidden h-full">
         
         {/* TOP HEADER */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Sertifikat GP Ansor</span>
-            <div className="hidden md:block bg-[#ebfef4] text-[#006633] px-3 py-1.5 rounded-lg text-xs font-extrabold border border-[#007a3d]/20 uppercase tracking-tight">
-              KABUPATEN TASIKMALAYA
+        <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 md:gap-4">
+            <button 
+              className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+            <span className="hidden sm:inline-block text-xs font-black text-slate-400 uppercase tracking-wider">SIMak Ansor</span>
+            <div className="bg-[#ebfef4] text-[#006633] px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-[10px] md:text-xs font-extrabold border border-[#007a3d]/20 uppercase tracking-tight">
+              KAB. TASIKMALAYA
             </div>
           </div>
 
@@ -1304,25 +1364,21 @@ export default function App() {
               <AnsorLogoSvg className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xs font-black uppercase tracking-wider text-slate-900">Sertifikat GP Ansor</h1>
-              <p className="text-[9px] text-[#006633] font-extrabold uppercase tracking-wider">Kab. Tasikmalaya</p>
+              <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">SIMak</h1>
+              <p className="text-[9px] text-[#006633] font-extrabold uppercase tracking-wider">Ansor Tasikmalaya</p>
             </div>
           </div>
           
           {/* Mobile selection dropdown */}
-          <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
             <select
               value={activeTab}
               onChange={(e) => setActiveTab(e.target.value as any)}
               className="bg-slate-100 text-slate-900 text-xs border border-slate-200 rounded-xl px-3 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633]"
             >
-              <option value="kegiatan">1. Kegiatan ({kegiatanList.length})</option>
-              <option value="kader">2. Import ({activeKegiatanParticipants.length})</option>
-              <option value="materi">3. Materi</option>
-              <option value="generate">4. Generate</option>
-              <option value="riwayat">5. Data Sertifikat</option>
-              <option value="signatures">Ttd</option>
-              <option value="config">Desain</option>
+              {availableTabsList.map(tab => (
+                <option key={tab.id} value={tab.id}>{tab.label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -1360,18 +1416,86 @@ export default function App() {
         <div className="flex-1 grid grid-cols-12 overflow-hidden h-full">
           
           {/* LEFT COLUMN: CONTROLLER & DATA EDITOR */}
-          <div className="col-span-12 bg-white flex flex-col overflow-y-auto h-full">
+          <div className="col-span-12 bg-white flex flex-col overflow-y-auto h-full relative">
+            {availableTabsList.length === 0 && (
+              <div className="absolute inset-0 z-50 bg-slate-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center mb-6 shadow-sm border border-amber-200">
+                  <ShieldAlert className="w-12 h-12 text-amber-600" />
+                </div>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-3">Menunggu Persetujuan Admin</h2>
+                <p className="text-base font-medium text-slate-600 max-w-lg leading-relaxed mb-8">
+                  Akun Anda telah terdaftar dan berhasil masuk ke sistem, namun Anda belum diberikan hak akses menu. Silakan hubungi Administrator agar akun Anda segera diaktifkan.
+                </p>
+                <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-white rounded-xl border border-slate-200 shadow-sm text-sm font-bold text-slate-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                  Status Akun: Menunggu Akses
+                </div>
+              </div>
+            )}
+            
+            <KaderisasiBreadcrumb activeKegiatan={activeKegiatan} participants={participants} />
+
+          {activeTab === 'sertifikat' && (
+            <div className="bg-slate-50 border-b border-slate-200 p-2 flex gap-2 overflow-x-auto shrink-0">
+              {['kegiatan', 'kader', 'materi', 'generate', 'signatures', 'config', 'riwayat'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setSertifikatTab(tab as any)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${sertifikatTab === tab ? 'bg-[#006633] text-white' : 'text-slate-600 hover:bg-slate-200'}`}
+                >
+                  {tab === 'kegiatan' ? 'Daftar Kegiatan' :
+                   tab === 'kader' ? 'Import Peserta' :
+                   tab === 'materi' ? 'Isi Materi' :
+                   tab === 'generate' ? 'Generate' :
+                   tab === 'signatures' ? 'Tanda Tangan' :
+                   tab === 'config' ? 'Desain' : 'Data Sertifikat'}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {activeTab === 'kaderisasi' && (
+            <DaftarKaderisasi 
+              kegiatanList={kegiatanList} 
+              setKegiatanList={setKegiatanList} 
+            />
+          )}
+          {activeTab === 'pendaftaran' && <PendaftaranPeserta kegiatanList={kegiatanList} />}
+          {activeTab === 'checkin' && <CheckInPeserta kegiatanList={kegiatanList} />}
+          {activeTab === 'idcard' && (
+            <IdCardPeserta 
+              kegiatanList={kegiatanList} 
+              idCardConfig={idCardConfig} 
+              setIdCardConfig={setIdCardConfig} 
+            />
+          )}
+          {activeTab === 'jadwal' && (
+            <JadwalMateri 
+              kegiatanList={kegiatanList} 
+              setKegiatanList={setKegiatanList} 
+            />
+          )}
+          {activeTab === 'absensi' && <AbsensiScan kegiatanList={kegiatanList} />}
+          {activeTab === 'rekap' && (
+            <RekapKelulusan 
+              kegiatanList={kegiatanList}
+              participants={participants}
+              setParticipants={setParticipants}
+              setActiveTab={setActiveTab}
+            />
+          )}
+          {activeTab === 'akun' && <ManajemenAkun />}
 
           {/* TAB 0: KEGIATAN MANAGER */}
-          {activeTab === 'kegiatan' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'kegiatan' && (
             <div className="p-5 space-y-6 animate-in fade-in duration-200">
               {/* Info Card banner */}
               <div className="bg-[#ebfef4]/40 border border-[#006633]/20 rounded-2xl p-4 flex gap-3.5 shadow-sm">
                 <Calendar className="w-5 h-5 text-[#006633] shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <h4 className="text-xs font-black text-[#006633] uppercase tracking-wide">Pilih atau Tambah Kegiatan</h4>
+                  <h4 className="text-xs font-black text-[#006633] uppercase tracking-wide">Pilih atau Tambah Kaderisasi</h4>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    Sertifikat diorganisasikan per pelaksanaan kegiatan. Daftarkan kegiatan Anda terlebih dahulu, kemudian impor data kader untuk kegiatan tersebut.
+                    Sertifikat diorganisasikan per pelaksanaan kegiatan. Daftarkan kaderisasi Anda terlebih dahulu, kemudian impor data kader untuk kegiatan tersebut.
                   </p>
                 </div>
               </div>
@@ -1502,7 +1626,7 @@ export default function App() {
           )}
 
           {/* TAB 1: KADER & GENERATOR LIST */}
-          {activeTab === 'kader' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'kader' && (
             <div className="p-5 space-y-6 animate-in fade-in duration-200">
               
               {/* Google Sheets Importer Integration */}
@@ -1657,7 +1781,7 @@ export default function App() {
           )}
 
           {/* TAB 6: RIWAYAT & CETAK PER PELAKSANAAN */}
-          {activeTab === 'riwayat' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'riwayat' && (
             <div className="p-5 space-y-6 animate-in fade-in duration-200">
               <div className="bg-amber-50/70 border border-amber-100 rounded-2xl p-4 flex gap-3.5 shadow-sm">
                 <Award className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
@@ -1772,7 +1896,7 @@ export default function App() {
           )}
 
           {/* TAB 2: MATERI EDITING (HALAMAN 2) */}
-          {activeTab === 'materi' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'materi' && (
             <div className="p-5 space-y-5">
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Daftar Materi Halaman Belakang</h3>
@@ -1857,7 +1981,7 @@ export default function App() {
           )}
 
           {/* TAB 3: GENERATE & SIMPAN SERTIFIKAT */}
-          {activeTab === 'generate' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'generate' && (
             <div className="p-5 space-y-5 animate-in fade-in duration-200">
               <div className="bg-[#ebfef4]/40 border border-[#006633]/20 rounded-2xl p-4 flex gap-3.5 shadow-sm">
                 <FileDown className="w-5 h-5 text-[#006633] shrink-0 mt-0.5" />
@@ -1908,7 +2032,7 @@ export default function App() {
           )}
 
           {/* TAB 3: SIGNATURES PANEL */}
-          {activeTab === 'signatures' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'signatures' && (
             <div className="p-5 space-y-6">
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Tanda Tangan Pengurus</h3>
@@ -2055,7 +2179,7 @@ export default function App() {
           )}
 
           {/* TAB 4: GENERAL CONFIG */}
-          {activeTab === 'config' && (
+          {activeTab === 'sertifikat' && sertifikatTab === 'config' && (
             <div className="p-5 space-y-5">
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Pengaturan Kop & Acara</h3>
@@ -2186,13 +2310,15 @@ export default function App() {
 
         </div>
 
-        {/* Hidden certificate render engine for PDF export */}
-        <HiddenCertificateRenderEngine
-          participants={deferredParticipants}
-          kegiatanList={deferredKegiatanList}
-          activeKegiatan={deferredActiveKegiatan}
-          config={deferredConfig}
-        />
+        {/* Hidden certificate render engine for PDF export - ONLY RENDER WHEN NEEDED TO SAVE MEMORY */}
+        {activeTab === 'sertifikat' && (sertifikatTab === 'generate' || sertifikatTab === 'riwayat') && (
+          <HiddenCertificateRenderEngine
+            participants={deferredActiveKegiatanParticipants}
+            kegiatanList={deferredKegiatanList}
+            activeKegiatan={deferredActiveKegiatan}
+            config={deferredConfig}
+          />
+        )}
         </div>
 
       {/* MODAL / SIDEBAR: MANUAL ADD/EDIT KADER FORM */}
