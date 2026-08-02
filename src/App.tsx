@@ -562,6 +562,17 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [kegiatanList, participants, config, selectedKegiatanId, supabaseReady]);
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    // Set screen to login and force reload to clear all React state and avoid unmount crashes
+    localStorage.setItem('ansor_app_screen', 'login');
+    window.location.reload();
+  };
+
   const markActiveKegiatanDraft = () => {
     setKegiatanList(prev => prev.map(k => (
       k.id === selectedKegiatanId ? { ...k, generatedAt: undefined } : k
@@ -1246,11 +1257,7 @@ export default function App() {
           <h2 className="text-2xl font-black text-slate-800 mb-2">Kegiatan Selesai</h2>
           <p className="text-slate-500 mb-6">Belum ada rencana kegiatan pelatihan kembali.</p>
           <button 
-            onClick={async () => {
-              try { await signOut(); } catch (err) { console.error(err); }
-              setHasSession(false);
-              setAppScreen('login');
-            }}
+            onClick={handleLogout}
             className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-sm transition-colors"
           >
             Keluar Aplikasi
@@ -1355,11 +1362,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={async () => {
-                  try { await signOut(); } catch (err) { console.error(err); }
-                  setHasSession(false);
-                  setAppScreen('login');
-                }}
+                onClick={handleLogout}
                 title="Keluar dari aplikasi"
                 className="p-2 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
               >
@@ -1417,11 +1420,7 @@ export default function App() {
             </select>
             <button
               type="button"
-              onClick={async () => {
-                try { await signOut(); } catch (err) { console.error(err); }
-                setHasSession(false);
-                setAppScreen('login');
-              }}
+              onClick={handleLogout}
               title="Keluar dari aplikasi"
               className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-lg transition-colors border border-slate-200 bg-white shadow-sm flex items-center justify-center shrink-0"
             >
