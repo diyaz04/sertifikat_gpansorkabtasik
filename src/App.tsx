@@ -1332,7 +1332,7 @@ export default function App() {
       <div className="flex-1 flex flex-col overflow-hidden h-full">
         
         {/* TOP HEADER */}
-        <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between shrink-0">
+        <header className="hidden lg:flex h-16 bg-white border-b border-slate-200 px-4 md:px-6 items-center justify-between shrink-0">
           <div className="flex items-center gap-3 md:gap-4">
             <button 
               className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
@@ -1404,17 +1404,29 @@ export default function App() {
             </div>
           </div>
           
-          {/* Mobile selection dropdown */}
-                    <div className="flex items-center gap-2">
+          {/* Mobile selection dropdown and actions */}
+          <div className="flex items-center gap-2">
             <select
               value={activeTab}
               onChange={(e) => setActiveTab(e.target.value as any)}
-              className="bg-slate-100 text-slate-900 text-xs border border-slate-200 rounded-xl px-3 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633]"
+              className="bg-slate-100 text-slate-900 text-xs border border-slate-200 rounded-xl px-2 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633] max-w-[130px] truncate"
             >
               {availableTabsList.map(tab => (
                 <option key={tab.id} value={tab.id}>{tab.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={async () => {
+                try { await signOut(); } catch (err) { console.error(err); }
+                setHasSession(false);
+                setAppScreen('login');
+              }}
+              title="Keluar dari aplikasi"
+              className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-lg transition-colors border border-slate-200 bg-white shadow-sm flex items-center justify-center shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
