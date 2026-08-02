@@ -49,6 +49,21 @@ create table if not exists public.certificates (
 
 create index if not exists certificates_participant_id_idx on public.certificates(participant_id);
 
+create table if not exists public.app_users (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  name text not null,
+  role text not null default 'instruktur',
+  permissions text[] default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.app_users enable row level security;
+create policy "Users can read all app_users" on public.app_users for select to authenticated using (true);
+create policy "Super admin can insert" on public.app_users for insert to authenticated with check (true);
+create policy "Super admin can update" on public.app_users for update to authenticated using (true) with check (true);
+
 create table if not exists public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
@@ -65,6 +80,9 @@ security definer
 set search_path = ''
 as $$
   select exists (
+    select 1 from public.app_users
+    where id = (select auth.uid()) and role = 'admin'
+  ) or exists (
     select 1 from public.admin_users
     where user_id = (select auth.uid())
   );
@@ -113,6 +131,8 @@ create table if not exists public.pendaftaran (
   alamat text not null,
   jawaban_custom jsonb not null default '{}'::jsonb,
   status text not null default 'menunggu',
+  status_kelulusan text not null default 'Belum Ditentukan',
+  predikat text,
   token_kehadiran uuid unique,
   id_card_generated_at timestamptz,
   created_at timestamptz not null default now(),

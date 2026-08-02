@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, UserPlus, Users, Loader2, Trash2, CheckCircle2, X } from 'lucide-react';
-import { AppUser } from '../types';
+import { AppUser, Kegiatan } from '../types';
 import { getAppUsers, createAccount, updateUserPermissions } from '../supabaseDatabase';
 
 const AVAILABLE_MENUS = [
@@ -14,7 +14,11 @@ const AVAILABLE_MENUS = [
   { id: 'sertifikat', label: '8. Sertifikat' },
 ];
 
-export default function ManajemenAkun() {
+interface ManajemenAkunProps {
+  kegiatanList?: Kegiatan[];
+}
+
+export default function ManajemenAkun({ kegiatanList = [] }: ManajemenAkunProps) {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -107,9 +111,9 @@ export default function ManajemenAkun() {
       await loadUsers();
       setVerifyingUser(null);
       setVerifyingPermissions([]);
-      alert('Akun berhasil diverifikasi!');
+      alert('Izin akses berhasil disimpan!');
     } catch (err: any) {
-      alert(err.message || 'Terjadi kesalahan saat verifikasi.');
+      alert(err.message || 'Terjadi kesalahan saat menyimpan izin akses.');
     } finally {
       setVerifyingProcessing(false);
     }
@@ -176,7 +180,7 @@ export default function ManajemenAkun() {
 
             <div className="pt-2 border-t border-slate-100">
               <label className="block text-xs font-black text-slate-800 mb-2">Izin Akses Menu</label>
-              <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
+              <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 mb-4">
                 {AVAILABLE_MENUS.map(menu => (
                   <label key={menu.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg border border-slate-100 cursor-pointer transition-colors">
                     <input 
@@ -188,6 +192,24 @@ export default function ManajemenAkun() {
                     <span className="text-xs font-medium text-slate-700">{menu.label}</span>
                   </label>
                 ))}
+              </div>
+              <label className="block text-xs font-black text-slate-800 mb-2">Akses Kegiatan Spesifik (Opsional)</label>
+              <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2">
+                {kegiatanList.length === 0 ? (
+                  <div className="text-xs text-slate-500 italic p-2">Belum ada kegiatan</div>
+                ) : (
+                  kegiatanList.map(k => (
+                    <label key={k.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg border border-slate-100 cursor-pointer transition-colors">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedPermissions.includes(`kegiatan:${k.id}`)}
+                        onChange={() => togglePermission(`kegiatan:${k.id}`)}
+                        className="w-4 h-4 text-[#006633] rounded focus:ring-[#006633]"
+                      />
+                      <span className="text-xs font-medium text-slate-700">{k.judulKegiatan} ({k.status})</span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
 
@@ -252,6 +274,15 @@ export default function ManajemenAkun() {
                             <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] rounded font-bold uppercase">Semua Akses</span>
                           ) : (
                             u.permissions.map(p => {
+                              if (p.startsWith('kegiatan:')) {
+                                const kId = p.replace('kegiatan:', '');
+                                const k = kegiatanList.find(keg => keg.id === kId);
+                                return (
+                                  <span key={p} className="px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] rounded font-medium truncate max-w-[150px]">
+                                    Kegiatan: {k ? k.judulKegiatan : 'Unknown'}
+                                  </span>
+                                )
+                              }
                               const menu = AVAILABLE_MENUS.find(m => m.id === p);
                               return (
                                 <span key={p} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] rounded font-medium">
@@ -263,16 +294,16 @@ export default function ManajemenAkun() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {u.permissions.length === 0 && u.role !== 'admin' && (
+                        {u.role !== 'admin' && (
                           <button
                             onClick={() => {
                               setVerifyingUser(u);
-                              setVerifyingPermissions([]);
+                              setVerifyingPermissions(u.permissions || []);
                             }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Verifikasi
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            {u.permissions.length === 0 ? 'Verifikasi' : 'Edit Akses'}
                           </button>
                         )}
                       </td>
@@ -292,8 +323,8 @@ export default function ManajemenAkun() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                Verifikasi Akun
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                {verifyingUser.permissions.length === 0 ? 'Verifikasi Akun' : 'Edit Akses Akun'}
               </h3>
               <button 
                 onClick={() => setVerifyingUser(null)}
@@ -305,14 +336,14 @@ export default function ManajemenAkun() {
             
             <div className="p-6 space-y-4">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <div className="text-xs text-slate-500 mb-1">Mendaftarkan Akses Untuk:</div>
+                <div className="text-xs text-slate-500 mb-1">Mengatur Akses Untuk:</div>
                 <div className="font-bold text-slate-800">{verifyingUser.name}</div>
                 <div className="text-sm text-slate-500">{verifyingUser.email}</div>
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-800 mb-2">Pilih Izin Akses Menu</label>
-                <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 mb-4">
                   {AVAILABLE_MENUS.map(menu => (
                     <label key={menu.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg border border-slate-100 cursor-pointer transition-colors">
                       <input 
@@ -324,6 +355,25 @@ export default function ManajemenAkun() {
                       <span className="text-sm font-medium text-slate-700">{menu.label}</span>
                     </label>
                   ))}
+                </div>
+                
+                <label className="block text-sm font-bold text-slate-800 mb-2">Akses Kegiatan Spesifik (Opsional)</label>
+                <div className="space-y-2 max-h-[150px] overflow-y-auto pr-2">
+                  {kegiatanList.length === 0 ? (
+                    <div className="text-xs text-slate-500 italic p-2">Belum ada kegiatan</div>
+                  ) : (
+                    kegiatanList.map(k => (
+                      <label key={k.id} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg border border-slate-100 cursor-pointer transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={verifyingPermissions.includes(`kegiatan:${k.id}`)}
+                          onChange={() => toggleVerifyingPermission(`kegiatan:${k.id}`)}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-600"
+                        />
+                        <span className="text-sm font-medium text-slate-700">{k.judulKegiatan} ({k.status})</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -340,8 +390,8 @@ export default function ManajemenAkun() {
                 disabled={verifyingProcessing}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl flex items-center gap-2 transition-colors disabled:opacity-50"
               >
-                {verifyingProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Verifikasi & Simpan
+                {verifyingProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                Simpan Akses
               </button>
             </div>
           </div>

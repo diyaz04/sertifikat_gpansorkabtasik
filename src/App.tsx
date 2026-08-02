@@ -316,6 +316,12 @@ export default function App() {
 
   const availableTabsList = useMemo(() => ALL_TABS.filter(t => hasAccess(t.id)), [ALL_TABS, hasAccess]);
 
+  const allowedKegiatanList = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin' || currentUser.permissions.includes('all')) return kegiatanList;
+    return kegiatanList.filter(k => currentUser.permissions.includes(`kegiatan:${k.id}`));
+  }, [currentUser, kegiatanList]);
+
   useEffect(() => {
     if (availableTabsList.length > 0 && !availableTabsList.find(t => t.id === activeTab)) {
       setActiveTab(availableTabsList[0].id as any);
@@ -414,7 +420,7 @@ export default function App() {
   }, [activeTab]);
 
   // Derived/computed active objects
-  const activeKegiatan = kegiatanList.find(k => k.id === selectedKegiatanId) || kegiatanList[0] || defaultKegiatan[0];
+  const activeKegiatan = kegiatanList.find(k => k.id === selectedKegiatanId) || allowedKegiatanList[0] || defaultKegiatan[0];
   const deferredParticipants = useDeferredValue(participants);
   const deferredKegiatanList = useDeferredValue(kegiatanList);
   const deferredActiveKegiatan = useDeferredValue(activeKegiatan);
@@ -1225,6 +1231,35 @@ export default function App() {
     );
   }
 
+
+
+  const isOnlySelesai = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') return false;
+    return allowedKegiatanList.length > 0 && allowedKegiatanList.every(k => k.status === 'selesai');
+  }, [currentUser, allowedKegiatanList]);
+
+  if (isOnlySelesai) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center w-screen font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-md w-full">
+          <Award className="w-16 h-16 text-[#006633] mx-auto mb-4" />
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Kegiatan Selesai</h2>
+          <p className="text-slate-500 mb-6">Belum ada rencana kegiatan pelatihan kembali.</p>
+          <button 
+            onClick={async () => {
+              try { await signOut(); } catch (err) { console.error(err); }
+              setHasSession(false);
+              setAppScreen('login');
+            }}
+            className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-sm transition-colors"
+          >
+            Keluar Aplikasi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen bg-slate-50/50 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       
@@ -1484,7 +1519,7 @@ export default function App() {
               setActiveTab={setActiveTab}
             />
           )}
-          {activeTab === 'akun' && <ManajemenAkun />}
+          {activeTab === 'akun' && <ManajemenAkun kegiatanList={kegiatanList} />}
 
           {/* TAB 0: KEGIATAN MANAGER */}
           {activeTab === 'sertifikat' && sertifikatTab === 'kegiatan' && (
@@ -1522,7 +1557,7 @@ export default function App() {
 
               {/* Kegiatan Grid/List */}
               <div className="space-y-3">
-                {kegiatanList.map((k) => {
+                {allowedKegiatanList.map((k) => {
                   const isSelected = selectedKegiatanId === k.id;
                   const count = participants.filter(p => p.kegiatanId === k.id).length;
                   return (
@@ -1801,7 +1836,7 @@ export default function App() {
                   onChange={(e) => setSelectedKegiatanId(e.target.value)}
                   className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633]"
                 >
-                  {kegiatanList.map(k => (
+                  {allowedKegiatanList.map(k => (
                     <option key={k.id} value={k.id}>
                       {k.judulKegiatan} ({participants.filter(p => p.kegiatanId === k.id).length} Peserta) {k.generatedAt ? '- Tersimpan' : '- Belum Generate'}
                     </option>

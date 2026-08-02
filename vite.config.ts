@@ -21,17 +21,17 @@ export default defineConfig(() => {
           display: 'standalone',
           icons: [
             {
-              src: '/src/assets/logo-ansor.png',
+              src: '/logo-ansor.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: '/src/assets/logo-ansor.png',
+              src: '/logo-ansor.png',
               sizes: '512x512',
               type: 'image/png'
             },
             {
-              src: '/src/assets/logo-ansor.png',
+              src: '/logo-ansor.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'
