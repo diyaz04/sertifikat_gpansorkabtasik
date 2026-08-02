@@ -19,6 +19,7 @@ export default function AbsensiScan({ kegiatanList }: Props) {
   const [loading, setLoading] = useState(false);
   
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [successPopup, setSuccessPopup] = useState<Pendaftaran | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const isProcessingRef = useRef(false);
   
@@ -155,6 +156,14 @@ export default function AbsensiScan({ kegiatanList }: Props) {
       });
       
       setScanMessage({ type: 'success', text: `Berhasil: ${pendaftar.nama} hadir!` });
+      
+      if (metode === 'scan') {
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        setSuccessPopup(pendaftar);
+        setTimeout(() => setSuccessPopup(null), 3000);
+      }
       
       // Refresh absensi list directly to avoid flashing the scanner
       const newAbsen = await getAbsensiMateri(activeKegiatan.id, activeMateri.id);
@@ -341,6 +350,28 @@ export default function AbsensiScan({ kegiatanList }: Props) {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* Success Popup Overlay */}
+      {successPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-transform duration-300 scale-100">
+            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-12 h-12 text-green-600" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-800 mb-2">Berhasil Hadir!</h3>
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 mb-6">
+              <p className="text-xl font-black text-[#006633]">{successPopup.nama}</p>
+              <p className="text-sm font-bold text-slate-500 mt-1">{successPopup.asalPac}</p>
+            </div>
+            <button 
+              onClick={() => setSuccessPopup(null)}
+              className="w-full bg-[#006633] hover:bg-green-800 text-white font-bold py-3.5 px-6 rounded-xl transition-colors shadow-lg shadow-green-900/20"
+            >
+              Tutup & Lanjut Scan
+            </button>
+          </div>
         </div>
       )}
     </div>
