@@ -47,6 +47,7 @@ import {
   Award,
   Edit,
   ChevronRight,
+  QrCode,
   FileDown,
   ShieldAlert
 } from 'lucide-react';
