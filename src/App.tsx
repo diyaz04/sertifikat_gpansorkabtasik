@@ -1244,10 +1244,12 @@ export default function App() {
 
 
 
-  const isOnlySelesai = useMemo(() => {
-    if (!currentUser || currentUser.role === 'admin') return false;
-    return allowedKegiatanList.length > 0 && allowedKegiatanList.every(k => k.status === 'selesai');
-  }, [currentUser, allowedKegiatanList]);
+  const isOnlySelesai = Boolean(
+    currentUser && 
+    currentUser.role !== 'admin' && 
+    allowedKegiatanList.length > 0 && 
+    allowedKegiatanList.every(k => k.status === 'selesai')
+  );
 
   if (isOnlySelesai) {
     return (
