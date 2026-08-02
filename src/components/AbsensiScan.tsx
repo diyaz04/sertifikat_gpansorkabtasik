@@ -12,20 +12,27 @@ export default function AbsensiScan({ kegiatanList }: Props) {
   const [selectedKegiatanId, setSelectedKegiatanId] = useState<string>('');
   
   const [pendaftarList, setPendaftarList] = useState<Pendaftaran[]>([]);
+  const pendaftarListRef = useRef<Pendaftaran[]>([]);
+  
   const [absensiList, setAbsensiList] = useState<AbsensiMateri[]>([]);
+  const absensiListRef = useRef<AbsensiMateri[]>([]);
   const [loading, setLoading] = useState(false);
   
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
   
-  // Audio for feedback
-  const beepSuccess = useRef<HTMLAudioElement | null>(null);
-  const beepError = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    pendaftarListRef.current = pendaftarList;
+  }, [pendaftarList]);
 
   useEffect(() => {
-    // We create simple beep sounds using AudioContext if available, or just rely on visual
-    // For simplicity, we just rely on visual, or standard audio elements if provided.
-  }, []);
+    absensiListRef.current = absensiList;
+  }, [absensiList]);
+
+  useEffect(() => {
+    isProcessingRef.current = isProcessing;
+  }, [isProcessing]);
 
   const availableKegiatans = kegiatanList.filter(k => k.status !== 'draft');
 
@@ -64,11 +71,26 @@ export default function AbsensiScan({ kegiatanList }: Props) {
     // Setup Scanner
     if (!activeMateri) return; // Don't start scanner if no active materi
 
-    const html5QrCode = new Html5Qrcode("reader");
-    let isScanning = true;
+    let html5QrCode: Html5Qrcode | null = null;
+    let isScanning = false;
+
+    try {
+      // Ensure the element actually exists before instantiating
+      if (!document.getElementById('reader')) {
+        console.warn('Element reader not found yet');
+        return;
+      }
+      
+      html5QrCode = new Html5Qrcode("reader");
+    } catch (e) {
+      console.error("Gagal inisialisasi scanner:", e);
+      return;
+    }
 
     const startScanner = async () => {
       try {
+        if (!html5QrCode) return;
+        isScanning = true;
         await html5QrCode.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -77,8 +99,8 @@ export default function AbsensiScan({ kegiatanList }: Props) {
         );
       } catch (err) {
         console.error("Gagal menggunakan kamera belakang, mencoba kamera depan...", err);
-        if (!isScanning) return;
         try {
+          if (!html5QrCode) return;
           // Fallback to user camera
           await html5QrCode.start(
             { facingMode: "user" },
@@ -88,6 +110,7 @@ export default function AbsensiScan({ kegiatanList }: Props) {
           );
         } catch (e) {
           console.error("Scanner failed to start completely.", e);
+          isScanning = false;
         }
       }
     };
@@ -95,19 +118,29 @@ export default function AbsensiScan({ kegiatanList }: Props) {
     startScanner();
 
     return () => {
-      isScanning = false;
-      html5QrCode.stop().then(() => {
-        html5QrCode.clear();
-      }).catch(err => console.error("Failed to clear scanner", err));
+      if (html5QrCode) {
+        try {
+          if (html5QrCode.isScanning) {
+            html5QrCode.stop().then(() => {
+              html5QrCode?.clear();
+            }).catch(err => console.error("Failed to stop scanner", err));
+          } else {
+            html5QrCode.clear();
+          }
+        } catch (e) {
+          console.error("Error during cleanup", e);
+        }
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMateri, pendaftarList]);
+  }, [activeMateri]); // Removed pendaftarList from dependencies!
 
   const processAbsensi = async (pendaftar: Pendaftaran, metode: 'scan' | 'manual') => {
     if (!activeKegiatan || !activeMateri) return;
     
     // Check if already exist in list locally first to save DB call
-    if (absensiList.some(a => a.pendaftaranId === pendaftar.id)) {
+    const currentAbsensiList = absensiListRef.current;
+    if (currentAbsensiList.some(a => a.pendaftaranId === pendaftar.id)) {
       setScanMessage({ type: 'error', text: `${pendaftar.nama} sudah absen sebelumnya!` });
       return;
     }
@@ -136,10 +169,11 @@ export default function AbsensiScan({ kegiatanList }: Props) {
   };
 
   const handleScanSuccess = (decodedText: string) => {
-    if (isProcessing) return; // Prevent double scan while processing
+    if (isProcessingRef.current) return; // Prevent double scan while processing
     
-    // Find pendaftar by token
-    const pendaftar = pendaftarList.find(p => p.tokenKehadiran === decodedText);
+    // Find pendaftar by token using REF
+    const currentPendaftarList = pendaftarListRef.current;
+    const pendaftar = currentPendaftarList.find(p => p.tokenKehadiran === decodedText);
     
     if (!pendaftar) {
       setScanMessage({ type: 'error', text: 'QR Code tidak valid atau bukan peserta kegiatan ini.' });
