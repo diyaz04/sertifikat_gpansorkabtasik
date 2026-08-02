@@ -295,15 +295,15 @@ export default function App() {
   });
 
   const ALL_TABS = useMemo(() => [
-    { id: 'kaderisasi', label: 'Daftar Kaderisasi', icon: Calendar },
-    { id: 'pendaftaran', label: 'Pendaftaran & Peserta', icon: Users },
-    { id: 'checkin', label: 'Check-in Peserta', icon: UserCheck },
-    { id: 'idcard', label: 'ID Card & QR', icon: MapPin },
-    { id: 'jadwal', label: 'Jadwal Materi', icon: Calendar },
-    { id: 'absensi', label: 'Absensi Materi', icon: BookOpen },
-    { id: 'rekap', label: 'Rekap Kelulusan', icon: CheckCircle2 },
-    { id: 'sertifikat', label: 'Sertifikat Kelulusan', icon: Award },
-    { id: 'akun', label: 'Manajemen Akun', icon: ShieldCheck },
+    { id: 'kaderisasi', label: 'Daftar Kaderisasi', icon: Calendar, category: 'UTAMA' },
+    { id: 'pendaftaran', label: 'Pendaftaran & Peserta', icon: Users, category: 'DATA PESERTA' },
+    { id: 'checkin', label: 'Check-in Peserta', icon: UserCheck, category: 'DATA PESERTA' },
+    { id: 'idcard', label: 'ID Card & QR', icon: MapPin, category: 'KELENGKAPAN' },
+    { id: 'jadwal', label: 'Jadwal Materi', icon: Calendar, category: 'KELENGKAPAN' },
+    { id: 'absensi', label: 'Absensi Materi', icon: BookOpen, category: 'PELAKSANAAN' },
+    { id: 'rekap', label: 'Rekap Kelulusan', icon: CheckCircle2, category: 'PELAKSANAAN' },
+    { id: 'sertifikat', label: 'Sertifikat Kelulusan', icon: Award, category: 'PELAKSANAAN' },
+    { id: 'akun', label: 'Manajemen Akun', icon: ShieldCheck, category: 'PENGATURAN' },
   ] as const, []);
 
   const hasAccess = useCallback((tabId: string) => {
@@ -1269,116 +1269,131 @@ export default function App() {
     );
   }
 
+  const groupedTabs = availableTabsList.reduce((acc, tab) => {
+    const cat = tab.category || 'MENU LAINNYA';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(tab);
+    return acc;
+  }, {} as Record<string, typeof availableTabsList>);
+
   return (
     <div className="flex h-screen w-screen bg-slate-50/50 text-slate-900 overflow-hidden font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
       
       {/* MOBILE OVERLAY */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
-      {/* SIDEBAR NAV */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 flex w-64 bg-white text-slate-900 flex-col border-r border-slate-200/80 shadow-2xl lg:shadow-2xs shrink-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+      {/* SIDEBAR NAV (DRAWER) */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:relative lg:translate-x-0 flex w-[280px] bg-white text-slate-900 flex-col border-r border-slate-200/80 shadow-2xl lg:shadow-2xs shrink-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* HEADER SIDEBAR */}
+        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#006633] text-white shadow-sm shrink-0">
-              <AnsorLogoSvg className="w-6 h-6 text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm shrink-0">
+              <AnsorLogoSvg className="w-7 h-7 text-[#006633]" />
             </div>
             <div className="leading-tight">
               <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">SIMak</h1>
-              <p className="text-[10px] text-[#006633] font-extrabold uppercase tracking-widest">Ansor Tasikmalaya</p>
+              <p className="text-[10px] text-slate-500 font-medium">Smart System Ansor</p>
             </div>
           </div>
           <button 
-            className="lg:hidden p-1 text-slate-400 hover:text-slate-700" 
+            className="lg:hidden p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors" 
             onClick={() => setIsMobileMenuOpen(false)}
           >
-            <XCircle className="w-6 h-6" />
+            <XCircle className="w-5 h-5" />
           </button>
         </div>
         
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 pb-2">MENU SIMAK</div>
-          
-          {availableTabsList.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button 
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(tab.id as any);
-                  setIsMobileMenuOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
-                  activeTab === tab.id 
-                    ? 'bg-[#006633] text-white shadow-sm font-extrabold' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className={`w-4 h-4 shrink-0 ${activeTab === tab.id ? 'text-white' : 'text-[#006633]'}`} />
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* MENU LIST (GROUPED) */}
+        <nav className="flex-1 p-4 space-y-6 overflow-y-auto pb-24 lg:pb-4 scrollbar-hide">
+          {Object.entries(groupedTabs).map(([category, tabs]) => (
+            <div key={category} className="space-y-2">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-1">
+                {category}
+              </div>
+              
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button 
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-r-full rounded-l-xl text-sm transition-all cursor-pointer relative ${
+                      isActive 
+                        ? 'bg-emerald-50 text-emerald-700 font-bold' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium'
+                    }`}
+                  >
+                    {isActive && (
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-emerald-500 rounded-l-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                    )}
+                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="bg-white rounded-xl p-3.5 text-[11px] leading-relaxed border border-slate-200/80 shadow-2xs">
-            <span className="text-slate-500 font-bold uppercase block mb-1 text-[9px] tracking-wider">Status Sistem</span>
-            <div className="flex items-center gap-2 font-bold text-[#006633]">
-              <span className="w-2 h-2 bg-[#006633] rounded-full animate-pulse"></span> 
-              {isSupabaseConfigured ? 'Supabase Aktif' : 'Auto-Save Lokal Aktif'}
+        {/* FOOTER SIDEBAR (PROFILE & LOGOUT) */}
+        <div className="p-4 border-t border-slate-100 bg-white">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <div className="w-10 h-10 bg-emerald-600 text-white rounded-full flex items-center justify-center font-bold shadow-sm shrink-0 uppercase">
+              {currentUser?.nama?.substring(0, 1) || 'A'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate">{currentUser?.nama || 'Administrator'}</p>
+              <p className="text-xs text-slate-500 truncate capitalize">{currentUser?.role || 'Admin'}</p>
             </div>
           </div>
+          
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            Keluar Aplikasi
+          </button>
         </div>
       </div>
 
       {/* MAIN WORKSPACE WRAPPER */}
-      <div className="flex-1 flex flex-col overflow-hidden h-full">
+      <div className="flex-1 flex flex-col overflow-hidden h-full pb-[72px] lg:pb-0 relative">
         
-        {/* TOP HEADER */}
-        <header className="hidden lg:flex h-16 bg-white border-b border-slate-200 px-4 md:px-6 items-center justify-between shrink-0">
-          <div className="flex items-center gap-3 md:gap-4">
-            <button 
-              className="lg:hidden p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-              onClick={() => setIsMobileMenuOpen(true)}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-            </button>
-            <span className="hidden sm:inline-block text-xs font-black text-slate-400 uppercase tracking-wider">SIMak Ansor</span>
-            <div className="bg-[#ebfef4] text-[#006633] px-2 py-1 md:px-3 md:py-1.5 rounded-lg text-[10px] md:text-xs font-extrabold border border-[#007a3d]/20 uppercase tracking-tight">
+        {/* DESKTOP TOP HEADER */}
+        <header className="hidden lg:flex h-16 bg-white border-b border-slate-200 px-6 items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-wider">SIMak Ansor</span>
+            <div className="bg-[#ebfef4] text-[#006633] px-3 py-1.5 rounded-lg text-xs font-extrabold border border-[#007a3d]/20 uppercase tracking-tight">
               KAB. TASIKMALAYA
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
               <div className="w-1.5 h-1.5 bg-[#006633] rounded-full animate-ping" />
               <span>{isSupabaseConfigured ? 'Supabase Online Aktif' : 'Auto-Save Lokal Aktif'}</span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                type="button"
-                onClick={handleLogout}
-                title="Keluar dari aplikasi"
-                className="p-2 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden md:inline">Keluar</span>
-              </button>
-              {/* Backup actions */}
-              <button
                 onClick={handleBackupExport}
                 title="Ekspor Backup JSON"
                 className="p-2 hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm flex items-center gap-1.5 text-xs font-bold"
               >
                 <Save className="w-4 h-4 text-[#006633]" />
-                <span className="hidden md:inline">Ekspor Backup</span>
+                <span className="hidden xl:inline">Ekspor Backup</span>
               </button>
               <label
                 title="Pulihkan Backup JSON"
@@ -1391,44 +1406,64 @@ export default function App() {
                   className="hidden"
                 />
                 <FileText className="w-4 h-4 text-[#006633]" />
-                <span className="hidden md:inline">Pulihkan</span>
+                <span className="hidden xl:inline">Pulihkan</span>
               </label>
             </div>
           </div>
         </header>
 
-        {/* MOBILE TOP NAVIGATION BAR */}
-        <div className="lg:hidden bg-white text-slate-900 border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-2xs shrink-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#006633] text-white shadow-2xs">
-              <AnsorLogoSvg className="w-5 h-5 text-white" />
+        {/* MOBILE TOP HEADER */}
+        <div className="lg:hidden bg-white text-slate-900 border-b border-slate-200 px-4 py-3 flex items-center shadow-sm shrink-0 z-10 sticky top-0">
+          <div className="flex items-center gap-3 w-full">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm shrink-0">
+              <AnsorLogoSvg className="w-6 h-6 text-[#006633]" />
             </div>
-            <div>
+            <div className="flex-1">
               <h1 className="text-sm font-black tracking-wider text-slate-900 uppercase">SIMak</h1>
               <p className="text-[9px] text-[#006633] font-extrabold uppercase tracking-wider">Ansor Tasikmalaya</p>
             </div>
           </div>
+        </div>
+
+        {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_10px_rgba(0,0,0,0.03)] z-40 flex items-center justify-around px-2 py-2 safe-area-pb">
+          {[
+            { id: 'kaderisasi', label: 'Dashboard', icon: Calendar },
+            { id: 'pendaftaran', label: 'Peserta', icon: Users },
+            { id: 'checkin', label: 'Kehadiran', icon: UserCheck },
+            { id: 'absensi', label: 'Scan QR', icon: QrCode },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            // Only render if user has access
+            if (!availableTabsList.find(t => t.id === tab.id)) return null;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex flex-col items-center justify-center w-16 gap-1 transition-colors ${
+                  isActive ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <div className={`p-1 rounded-xl ${isActive ? 'bg-emerald-50' : ''}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className={`text-[10px] whitespace-nowrap font-medium ${isActive ? 'font-bold' : ''}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
           
-          {/* Mobile selection dropdown and actions */}
-          <div className="flex items-center gap-2">
-            <select
-              value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value as any)}
-              className="bg-slate-100 text-slate-900 text-xs border border-slate-200 rounded-xl px-2 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-[#006633] max-w-[130px] truncate"
-            >
-              {availableTabsList.map(tab => (
-                <option key={tab.id} value={tab.id}>{tab.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="Keluar dari aplikasi"
-              className="p-1.5 hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-lg transition-colors border border-slate-200 bg-white shadow-sm flex items-center justify-center shrink-0"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center w-16 gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <div className="p-1 rounded-xl">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </div>
+            <span className="text-[10px] whitespace-nowrap font-medium">Menu</span>
+          </button>
         </div>
 
         {/* NOTIFICATION TOAST */}

@@ -64,23 +64,41 @@ export default function AbsensiScan({ kegiatanList }: Props) {
     // Setup Scanner
     if (!activeMateri) return; // Don't start scanner if no active materi
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
-    );
+    const html5QrCode = new Html5Qrcode("reader");
+    let isScanning = true;
 
-    html5QrcodeScanner.render(
-      (decodedText) => handleScanSuccess(decodedText),
-      (errorMessage) => {
-        // Just ignore errors, it scans repeatedly
+    const startScanner = async () => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => handleScanSuccess(decodedText),
+          () => {} // ignore errors
+        );
+      } catch (err) {
+        console.error("Gagal menggunakan kamera belakang, mencoba kamera depan...", err);
+        if (!isScanning) return;
+        try {
+          // Fallback to user camera
+          await html5QrCode.start(
+            { facingMode: "user" },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => handleScanSuccess(decodedText),
+            () => {} 
+          );
+        } catch (e) {
+          console.error("Scanner failed to start completely.", e);
+        }
       }
-    );
+    };
+
+    startScanner();
 
     return () => {
-      html5QrcodeScanner.clear().catch(error => {
-        console.error("Failed to clear html5QrcodeScanner. ", error);
-      });
+      isScanning = false;
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+      }).catch(err => console.error("Failed to clear scanner", err));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMateri, pendaftarList]);
