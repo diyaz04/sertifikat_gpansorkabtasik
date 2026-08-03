@@ -759,7 +759,7 @@ export default function App() {
       };
       setKegiatanList(prev => [...prev, newKeg]);
       setSelectedKegiatanId(newKeg.id);
-      setActiveTab('kader');
+      setActiveTab('pendaftaran');
       triggerNotification('success', 'Kaderisasi baru berhasil ditambahkan! Silakan lanjut impor data kader.');
     }
 
@@ -1000,13 +1000,14 @@ export default function App() {
 
     if (pesertaKegiatan.length === 0) {
       triggerNotification('error', 'Import atau tambah peserta dulu sebelum generate sertifikat.');
-      setActiveTab('kader');
+      setActiveTab('pendaftaran');
       return;
     }
 
     if (!kegiatan.materi || kegiatan.materi.length === 0) {
       triggerNotification('error', 'Isi minimal satu materi kegiatan sebelum generate sertifikat.');
-      setActiveTab('materi');
+      setActiveTab('sertifikat');
+      setSertifikatTab('materi');
       return;
     }
 
@@ -1025,7 +1026,8 @@ export default function App() {
     setParticipants(nextParticipants);
     setSelectedIds(new Set(pesertaKegiatan.map(p => p.id)));
     setActiveParticipantId(pesertaKegiatan[0].id);
-    setActiveTab('riwayat');
+    setActiveTab('sertifikat');
+    setSertifikatTab('riwayat');
     let certificatesIssued = true;
     if (isSupabaseConfigured) {
       let onlineOk = await syncToOnlineDatabase(buildOnlineDatabasePayload(nextKegiatanList, nextParticipants), true);
@@ -1713,7 +1715,7 @@ export default function App() {
               <div className="pt-2 text-center">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('kader')}
+                  onClick={() => setActiveTab('pendaftaran')}
                   className="inline-flex items-center gap-1.5 text-xs text-[#006633] font-extrabold uppercase hover:underline cursor-pointer"
                 >
                   Lanjut Langkah 2: Impor Data Kader &rarr;
@@ -1863,9 +1865,20 @@ export default function App() {
                 </div>
 
                 <div className="flex justify-end">
+                  <div className="mt-8 bg-blue-50/50 border border-blue-100 rounded-2xl p-6 text-center">
+                    <BookOpen className="w-10 h-10 text-blue-600 mx-auto mb-3 opacity-80" />
+                    <h4 className="text-sm font-black text-blue-900 uppercase">Perhatian: Silabus Materi Belum Diisi!</h4>
+                    <p className="text-[11px] text-blue-700/80 max-w-md mx-auto mt-1 mb-4">Sertifikat kaderisasi Ansor diwajibkan mencantumkan silabus materi pada halaman 2. Lengkapi silabus sekarang sebelum melanjutkan pencetakan.</p>
+                    <button
+                      onClick={() => { setActiveTab('sertifikat'); setSertifikatTab('materi'); }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-4 py-2 rounded-xl transition-colors shadow-sm inline-flex items-center gap-1.5"
+                    >
+                      Isi Materi Sekarang <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('materi')}
+                    onClick={() => { setActiveTab('sertifikat'); setSertifikatTab('materi'); }}
                     disabled={activeKegiatanParticipants.length === 0}
                     className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
@@ -1912,16 +1925,14 @@ export default function App() {
                   <Award className="w-10 h-10 text-slate-300 mx-auto" />
                   <div>
                     <p className="text-sm font-black text-slate-700 uppercase">Sertifikat Belum Digenerate</p>
-                    <p className="text-xs text-slate-500 mt-1">Lengkapi data peserta dan materi, lalu generate dulu agar masuk ke arsip data sertifikat.</p>
+                    <p className="text-xs text-slate-500 mb-4">Pastikan Anda sudah mengonfirmasi template dan data peserta sebelum mencetak massal.</p>
+                    <button
+                      onClick={() => { setActiveTab('sertifikat'); setSertifikatTab('generate'); }}
+                      className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] px-4 py-2 rounded-xl transition-colors shadow-sm inline-flex items-center gap-1.5"
+                    >
+                      Kembali ke Menu Generate
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('generate')}
-                    className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
-                  >
-                    Buka Generate
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
                 </div>
               ) : (
               <div className="space-y-4">
@@ -1938,13 +1949,12 @@ export default function App() {
                   {filteredParticipants.length === 0 ? (
                     <div className="p-8 text-center space-y-2">
                       <Users className="w-8 h-8 text-slate-300 mx-auto" />
-                      <p className="text-xs text-slate-400 font-medium">Belum ada kader terdaftar di kegiatan ini.</p>
+                      <p className="text-xs text-slate-500 mb-4 max-w-xs">Kegiatan ini belum memiliki peserta terdaftar yang bisa dicetak sertifikatnya.</p>
                       <button
-                        type="button"
-                        onClick={() => setActiveTab('kader')}
-                        className="text-[10px] text-[#006633] font-extrabold uppercase tracking-wider hover:underline cursor-pointer"
+                        onClick={() => setActiveTab('pendaftaran')}
+                        className="bg-[#006633] hover:bg-[#005229] text-white font-bold text-[11px] px-4 py-2 rounded-xl transition-colors"
                       >
-                        Impor Sekarang &rarr;
+                        Tambah / Impor Peserta
                       </button>
                     </div>
                   ) : (
@@ -2066,7 +2076,7 @@ export default function App() {
                 <div className="flex justify-end pt-2">
                   <button
                     type="button"
-                    onClick={() => setActiveTab('generate')}
+                    onClick={() => { setSertifikatTab('generate'); }}
                     className="inline-flex items-center gap-1.5 bg-[#006633] hover:bg-[#005229] text-white text-xs font-extrabold uppercase px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
                   >
                     Lanjut Generate
