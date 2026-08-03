@@ -3,9 +3,9 @@ import QRCode from 'qrcode';
 import { Participant, CertificateConfig } from '../types';
 import { formatIndonesianDate } from '../utils';
 import { Award } from 'lucide-react';
-import templatePkdUrl from '../assets/template-pkd.jpg';
-import templatePklUrl from '../assets/template-pkl.jpg';
-import templateDirosahUlaUrl from '../assets/template-dirosah-ula.jpg';
+import templatePkdUrl from '../assets/template-pkd.png';
+import templatePklUrl from '../assets/template-pkl.png';
+import templateDirosahUlaUrl from '../assets/template-dirosah-ula.png';
 import ansorLogoUrl from '../assets/logo-ansor.png';
 
 interface CertificatePreviewProps {
@@ -49,10 +49,11 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
     : (config.eventName || defaultActivityName);
 
   const isDirosahUla = config.jenisKegiatan === 'Dirosah Ula' || config.eventName?.toLowerCase().includes('dirosah') || config.eventName?.toLowerCase().includes('ula') || config.eventName?.toLowerCase().includes('rijalul');
+  const isPkl = config.jenisKegiatan === 'PKL' || config.eventName?.toLowerCase().includes('pkl');
 
   const getTemplateUrl = () => {
     if (config.customBackgroundUrl) return config.customBackgroundUrl;
-    if (config.jenisKegiatan === 'PKL') return templatePklUrl;
+    if (isPkl) return templatePklUrl;
     if (isDirosahUla) return templateDirosahUlaUrl;
     return templatePkdUrl;
   };
@@ -169,63 +170,49 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
           </p>
         </div>
 
-        {config.signees[0]?.signatureDataUrl && (
-          <img
-            src={config.signees[0].signatureDataUrl}
-            alt=""
-            className="absolute left-[115px] top-[625px] max-h-[95px] max-w-[190px] object-contain"
-            draggable={false}
-          />
-        )}
-
-        {renderSignatureQr(0, 'absolute left-[196px] top-[649px] h-[64px] w-[64px]')}
-
-        {config.signees[1]?.signatureDataUrl && (
-          <img
-            src={config.signees[1].signatureDataUrl}
-            alt=""
-            className="absolute left-[495px] top-[625px] max-h-[95px] max-w-[190px] object-contain"
-            draggable={false}
-          />
-        )}
-
-        {renderSignatureQr(1, 'absolute left-[531px] top-[649px] h-[64px] w-[64px]')}
-
-        <div className="absolute left-[700px] top-[598px] w-[340px] text-center text-[14px] font-normal text-black leading-[26px]">
-          Tasikmalaya, {finishedDate}
+        {/* Date Section */}
+        <div className="absolute left-[66px] top-[550px] w-[950px] flex justify-end text-[14px] font-normal text-black">
+          <span>Tasikmalaya, {finishedDate}</span>
         </div>
 
-        {isDirosahUla && (
-          <div 
-            className="absolute left-[710px] top-[628px] w-[300px] text-center text-[12px] font-bold z-10 whitespace-nowrap tracking-tight"
-            style={{ 
-              color: '#004349'
-            }}
-          >
-            Ketua MDS Rijalul Ansor Kab. Tasikmalaya
-          </div>
-        )}
+        {/* Signatures Box */}
+        <div className="absolute left-[66px] top-[575px] w-[950px] text-center text-black flex flex-col items-center">
+           <div className="font-extrabold text-[15px] uppercase mb-1 leading-tight">
+              PIMPINAN CABANG GERAKAN PEMUDA ANSOR<br/>KABUPATEN TASIKMALAYA
+           </div>
+           
+           <div className="flex justify-between w-[800px] mt-2">
+              {/* Kiri */}
+              <div className="flex flex-col items-center w-[300px]">
+                 <span className="font-bold text-[14px]">{config.penandatanganSatuJabatan || (config.signees && config.signees[0]?.title) || 'Ketua'}</span>
+                 <div className="h-[75px] w-full flex items-center justify-center relative my-1">
+                    {config.signees && config.signees[0]?.signatureDataUrl && (
+                      <img src={config.signees[0].signatureDataUrl} className="absolute max-h-[70px] max-w-[200px] object-contain z-0" draggable={false} />
+                    )}
+                 </div>
+                 <span className="font-bold text-[14px] underline underline-offset-4 decoration-1">{config.penandatanganSatuNama || (config.signees && config.signees[0]?.name) || 'NAMA KETUA'}</span>
+              </div>
 
-        <div
-          className="absolute left-[710px] top-[716px] w-[300px] text-center text-[13px] font-semibold leading-[1.05] text-black"
-          style={{ textDecoration: 'underline', textDecorationThickness: '1px', textUnderlineOffset: '2px' }}
-        >
-          {isDirosahUla && (config.ketuaPelaksana === 'Sahabat Ahmad Bukhari, S.Sy.' || !config.ketuaPelaksana || config.ketuaPelaksana === 'Ketua Pelaksana')
-            ? 'Aj. Husni Aziz Mubarok, M.Pd.'
-            : (config.ketuaPelaksana || 'Ketua Pelaksana')}
+              {/* Kanan */}
+              <div className="flex flex-col items-center w-[300px]">
+                 <span className="font-bold text-[14px]">{config.penandatanganDuaJabatan || (config.signees && config.signees[1]?.title) || 'Sekretaris'}</span>
+                 <div className="h-[75px] w-full flex items-center justify-center relative my-1">
+                    {config.signees && config.signees[1]?.signatureDataUrl && (
+                      <img src={config.signees[1].signatureDataUrl} className="absolute max-h-[70px] max-w-[200px] object-contain z-0" draggable={false} />
+                    )}
+                 </div>
+                 <span className="font-bold text-[14px] underline underline-offset-4 decoration-1">{config.penandatanganDuaNama || (config.signees && config.signees[1]?.name) || 'NAMA SEKRETARIS'}</span>
+              </div>
+           </div>
         </div>
-
-        {renderSignatureQr(2, 'absolute left-[828px] top-[649px] h-[64px] w-[64px]')}
 
         {certificateQrUrl && (
           <div className="absolute left-[66px] top-[746px] flex items-center gap-2 text-black">
             <div className="h-[36px] w-[36px] bg-white p-[2px] border border-[#006633]">
               <img src={certificateQrUrl} alt="QR verifikasi sertifikat" className="h-full w-full block" draggable={false} />
             </div>
-            <div className="w-[300px] text-[7.5px] leading-[1.2]">
-              <span className="font-bold">Sertifikat ini telah ditandatangani secara digital</span>
-              <br />
-              dengan Sistem Manajemen Kaderisasi PC Ansor Kab. Tasikmalaya. Pindai QR untuk verifikasi keaslian sertifikat.
+            <div className="w-[380px] text-[8px] leading-[1.3]">
+              Sertifikat ini di keluarkan dari Sistem Informasi dan Manajemen Kaderisasi ansor Kabupaten Tasikmalaya. Scan untuk mengecek keaslian sertifikat.
             </div>
           </div>
         )}
@@ -236,16 +223,16 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
   // Render Page 2 (Back Side of Certificate: Syllabus/Materi)
   const renderBackPage = () => {
     const materialCount = config.materi.length;
-    const denseLayout = materialCount > 9;
-    const ultraDenseLayout = materialCount > 12;
+    const denseLayout = materialCount > 6;
+    const ultraDenseLayout = materialCount > 10;
     const rowStyle = {
-      padding: ultraDenseLayout ? '4px 7px' : denseLayout ? '5px 8px' : '8px',
+      padding: ultraDenseLayout ? '1px 7px 6px 7px' : denseLayout ? '2px 8px 8px 8px' : '2px 8px 12px 8px',
       fontSize: ultraDenseLayout ? '9.5px' : denseLayout ? '10.5px' : '12px',
       lineHeight: ultraDenseLayout ? '1.12' : '1.2',
       verticalAlign: 'middle' as const,
     };
     const headerCellStyle = {
-      padding: ultraDenseLayout ? '5px 7px' : denseLayout ? '6px 8px' : '10px',
+      padding: ultraDenseLayout ? '4px 7px' : denseLayout ? '5px 8px' : '8px 10px',
       lineHeight: '1.2',
       verticalAlign: 'middle' as const,
     };
@@ -280,68 +267,65 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
         {/* TABLE OF MATERI */}
         <div className={`flex-1 flex flex-col justify-start px-8 overflow-hidden ${denseLayout ? 'my-1' : 'my-2'}`}>
           {/* BIODATA PESERTA */}
-          <div className={`border rounded-xl grid grid-cols-2 text-slate-800 ${denseLayout ? 'p-2 mb-1.5 gap-3 text-[9.5px]' : 'p-3 mb-3 gap-4 text-xs'}`} style={{ backgroundColor: 'rgba(235, 254, 244, 0.5)', borderColor: 'rgba(0, 102, 51, 0.2)' }}>
-            <div className={denseLayout ? 'space-y-0.5' : 'space-y-1.5'}>
-              <div className="flex">
-                <span className="font-bold text-slate-500 w-28 shrink-0">Nama Lengkap</span>
-                <span className="font-bold text-[#006633]">: {participant.name || '-'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-slate-500 w-28 shrink-0">Utusan Peserta</span>
-                <span className="font-semibold text-slate-800">: {participant.institution || '-'}</span>
-              </div>
+          <div className={`flex items-start gap-6 text-slate-800 ${ultraDenseLayout ? 'mb-1.5' : denseLayout ? 'mb-2' : 'mb-4'} pl-4`}>
+            {/* Foto 3x4 */}
+            <div className={`border-2 border-slate-800 flex items-center justify-center bg-slate-50 shrink-0 ${ultraDenseLayout ? 'w-[75px] h-[100px]' : denseLayout ? 'w-[90px] h-[120px]' : 'w-[113px] h-[151px]'}`}>
+               <span className={`text-slate-300 text-center px-2 ${ultraDenseLayout ? 'text-[8px]' : 'text-[10px]'}`}>FOTO<br/>3x4</span>
             </div>
-            <div className={denseLayout ? 'space-y-0.5' : 'space-y-1.5'}>
+            
+            <div className={`flex flex-col justify-center mt-1 ${ultraDenseLayout ? 'space-y-1 text-[10px]' : denseLayout ? 'space-y-1.5 text-[11px]' : 'space-y-3 text-[14px]'}`}>
               <div className="flex">
-                <span className="font-bold text-slate-500 w-36 shrink-0">Tempat, Tanggal Lahir</span>
-                <span className="font-semibold text-slate-800">
+                <span className="w-20 shrink-0 font-medium">Nama</span>
+                <span className="font-bold">: {participant.name || '-'}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 shrink-0 font-medium">TTL</span>
+                <span className="font-medium">
                   : {participant.tempatLahir ? `${participant.tempatLahir}, ` : ''}
                   {participant.tanggalLahir ? formatIndonesianDate(participant.tanggalLahir) : '-'}
                 </span>
               </div>
               <div className="flex">
-                <span className="font-bold text-slate-500 w-36 shrink-0">Nomor Sertifikat</span>
-                <span className="font-mono font-bold text-slate-800">: {displayCertificateNumber || '-'}</span>
+                <span className="w-20 shrink-0 font-medium">Utusan</span>
+                <span className="font-medium">: {participant.institution || '-'}</span>
+              </div>
+              <div className="flex">
+                <span className="w-20 shrink-0 font-medium">Jabatan</span>
+                <span className="font-medium">: {participant.role || '-'}</span>
               </div>
             </div>
           </div>
 
-          <table className="w-full text-left border-collapse border border-slate-300 rounded-lg overflow-hidden shadow-sm table-fixed">
+          <table className="w-full text-left border-collapse border border-slate-400 overflow-hidden table-fixed">
             <thead>
-              <tr className="bg-[#006633] text-white font-sans uppercase tracking-wider text-[11px]">
-                <th style={headerCellStyle} className="border border-slate-300 align-middle text-center w-10">No</th>
-                <th style={headerCellStyle} className="border border-slate-300 align-middle text-left">Materi Pokok / Sub-Materi</th>
-                <th style={headerCellStyle} className="border border-slate-300 align-middle w-[125px] text-center">Jam Pelajaran (JP)</th>
-                <th style={headerCellStyle} className="border border-slate-300 align-middle w-[230px] text-left">Narasumber / Instruktur</th>
+              <tr className="bg-white text-slate-900 font-bold uppercase tracking-wider text-[12px] border-b-2 border-slate-400">
+                <th style={headerCellStyle} className="border-r border-slate-400 align-middle text-center w-12">NO</th>
+                <th style={headerCellStyle} className="border-r border-slate-400 align-middle text-center">MATERI</th>
+                <th style={headerCellStyle} className="align-middle text-center w-[300px]">NARASUMBER</th>
               </tr>
             </thead>
             <tbody>
               {config.materi.length > 0 ? (
                 config.materi.map((item, index) => (
-                  <tr key={item.id} style={{ backgroundColor: index % 2 === 0 ? 'rgba(248, 250, 252, 0.75)' : '#ffffff' }}>
-                    <td style={rowStyle} className="border border-slate-300 align-middle text-center font-mono">{index + 1}</td>
-                    <td style={rowStyle} className="border border-slate-300 align-middle text-left font-medium text-slate-800 break-words">{item.title}</td>
-                    <td style={rowStyle} className="border border-slate-300 align-middle text-center font-mono whitespace-nowrap">{item.hours} JP</td>
-                    <td style={rowStyle} className="border border-slate-300 align-middle text-left text-slate-600 font-medium break-words">{item.instructor || '-'}</td>
+                  <tr key={item.id} className="border-b border-slate-300">
+                    <td style={rowStyle} className="border-r border-slate-400 text-center font-medium">
+                      {index + 1}
+                    </td>
+                    <td style={rowStyle} className="border-r border-slate-400 pl-4 text-left font-medium text-slate-800">
+                      {item.title}
+                    </td>
+                    <td style={rowStyle} className="px-2 text-center font-medium text-slate-800">
+                      {item.instructor || '-'}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="border border-slate-300 p-8 text-center text-slate-400 italic">
+                  <td colSpan={3} className="border-b border-slate-300 p-8 text-center text-slate-400 italic">
                     Belum ada materi pelatihan yang diinputkan. Silakan input pada menu pengaturan.
                   </td>
                 </tr>
               )}
-              {/* Total Jam Pelajaran Row */}
-              <tr className="font-bold text-[#006633]" style={{ backgroundColor: 'rgba(235, 254, 244, 0.7)' }}>
-                <td colSpan={2} style={headerCellStyle} className="border border-slate-300 align-middle text-right uppercase tracking-wider text-[10px]">
-                  Total Alokasi Jam Pelajaran
-                </td>
-                <td style={headerCellStyle} className="border border-slate-300 align-middle text-center font-mono text-[11px]">
-                  {totalJP} JP
-                </td>
-                <td style={headerCellStyle} className="border border-slate-300 align-middle bg-white"></td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -363,39 +347,47 @@ function CertificatePreviewComponent({ participant, config, showBackPage = false
                   <img src={certificateQrUrl} alt="QR verifikasi sertifikat" className="h-full w-full block" draggable={false} />
                 </div>
                 <p className="max-w-[330px] text-[8.5px] leading-snug">
-                  Sertifikat ini telah ditandatangani secara digital dengan Sistem Manajemen Kaderisasi PC Ansor Kab. Tasikmalaya. Pindai QR untuk verifikasi keaslian.
+                  Sertifikat ini di keluarkan dari Sistem Informasi dan Manajemen Kaderisasi ansor Kabupaten Tasikmalaya. Scan untuk mengecek keaslian sertifikat.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Instruktur/Tim Kaderisasi Signature */}
-          <div className="flex flex-col items-center text-center w-[200px]">
-            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">
-              Disahkan di Tasikmalaya,
-            </p>
-            <p className="text-[10px] text-[#006633] uppercase font-black tracking-wider leading-tight">
-              {config.jenisKegiatan === 'PKL'
-                ? (config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH').toUpperCase()
-                : 'TIM INSTRUKTUR CABANG'}
-            </p>
-            <div className={`flex ${denseLayout ? 'h-[48px]' : 'h-[68px]'} items-center justify-center`}>
-              {config.jenisKegiatan !== 'PKL' && signeeQrUrls[1] && (
-                <div className={`${denseLayout ? 'h-[44px] w-[44px]' : 'h-[58px] w-[58px]'} bg-white p-[4px] border border-[#006633] shadow-sm`}>
-                  <img src={signeeQrUrls[1]} alt="QR verifikasi tanda tangan tim instruktur" className="h-full w-full block" draggable={false} />
-                </div>
-              )}
+          {/* Signatures Area */}
+          <div className="flex gap-8 items-end">
+            {/* Instruktur Signature (Selalu ada untuk PKD & Dirosah, diganti nama lain untuk PKL) */}
+            <div className="flex flex-col items-center text-center w-[240px]">
+              <p className="text-[12px] text-black font-semibold tracking-wider mb-0.5">
+                {isPkl 
+                  ? (config.penandatanganPklJabatan || 'TIM INSTRUKTUR WILAYAH')
+                  : (config.penandatanganInstrukturJabatan || (config.signees && config.signees[2]?.title) || 'Instruktur Kaderisasi,')
+                }
+              </p>
+              <div className={`w-full ${ultraDenseLayout ? 'h-[40px]' : denseLayout ? 'h-[60px]' : 'h-[80px]'} flex items-center justify-center`}>
+                 {/* Wet signature space */}
+              </div>
+              <p className="text-[13px] font-bold text-black border-b border-black pb-0.5 w-full uppercase">
+                {isPkl 
+                  ? (config.penandatanganPklNama || 'NAMA INSTRUKTUR WILAYAH')
+                  : (config.penandatanganInstrukturNama || (config.signees && config.signees[2]?.name) || 'Iman Nurjaman, M.Pd')
+                }
+              </p>
             </div>
-            <p className="text-[12px] font-extrabold text-slate-800 border-b border-slate-300 pb-0.5 w-full">
-              {config.jenisKegiatan === 'PKL'
-                ? (config.penandatanganPklNama || 'H. Instruktur PKL, M.Pd.')
-                : 'Iman Nurjaman, M.Pd'}
-            </p>
-            <p className="text-[8px] font-mono text-slate-400 tracking-wider">
-              {config.jenisKegiatan === 'PKL'
-                ? (config.penandatanganPklJabatan ? 'Instruktur Kaderisasi' : 'Bidang Kaderisasi')
-                : 'Bidang Kaderisasi'}
-            </p>
+
+            {/* Ketua MDS Rijalul Ansor (Khusus Dirosah Ula) */}
+            {isDirosahUla && (
+              <div className="flex flex-col items-center text-center w-[240px]">
+                <p className="text-[12px] text-black font-semibold tracking-wider mb-0.5">
+                  {config.penandatanganDirosahJabatan || 'Ketua MDS Rijalul Ansor,'}
+                </p>
+                <div className={`w-full ${ultraDenseLayout ? 'h-[40px]' : denseLayout ? 'h-[60px]' : 'h-[80px]'} flex items-center justify-center`}>
+                   {/* Wet signature space */}
+                </div>
+                <p className="text-[13px] font-bold text-black border-b border-black pb-0.5 w-full uppercase">
+                  {config.penandatanganDirosahNama || 'NAMA KETUA MDS'}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

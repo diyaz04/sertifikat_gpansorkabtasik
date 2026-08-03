@@ -61,6 +61,14 @@ export interface Kegiatan {
   deskripsi?: string;
   formSchema?: FormField[];
   syaratKelulusan?: number; // Persentase kehadiran minimal (default 80)
+  penandatanganSatuNama?: string; // e.g. Badrudin, S.Ag
+  penandatanganSatuJabatan?: string; // e.g. Ketua
+  penandatanganDuaNama?: string;
+  penandatanganDuaJabatan?: string;
+  penandatanganInstrukturNama?: string;
+  penandatanganInstrukturJabatan?: string;
+  penandatanganDirosahNama?: string;
+  penandatanganDirosahJabatan?: string;
 }
 
 export type PendaftaranStatus = 'daftar' | 'checkin' | 'fiks' | 'ditolak';
@@ -113,6 +121,14 @@ export interface CertificateConfig {
   jenisKegiatan?: JenisKegiatan; // Untuk memilih template gambar (PKD / PKL / Dirosah Ula)
   penandatanganPklNama?: string; // Nama penandatangan khusus halaman 2 PKL
   penandatanganPklJabatan?: string; // Jabatan penandatangan khusus halaman 2 PKL
+  penandatanganSatuNama?: string;
+  penandatanganSatuJabatan?: string;
+  penandatanganDuaNama?: string;
+  penandatanganDuaJabatan?: string;
+  penandatanganInstrukturNama?: string;
+  penandatanganInstrukturJabatan?: string;
+  penandatanganDirosahNama?: string;
+  penandatanganDirosahJabatan?: string;
 }
 
 export interface IdCardConfig {

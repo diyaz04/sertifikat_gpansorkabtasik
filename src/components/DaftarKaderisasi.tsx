@@ -273,6 +273,41 @@ function FormKaderisasi({ kegiatan, setKegiatan, onSave, onCancel }: { kegiatan:
             </div>
           </div>
           
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-100 mt-6">Penandatangan Sertifikat (Halaman Depan)</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Jabatan Tanda Tangan Kiri</label>
+              <input type="text" value={kegiatan.penandatanganSatuJabatan || ''} onChange={e => setKegiatan({...kegiatan, penandatanganSatuJabatan: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Contoh: Ketua" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Nama Tanda Tangan Kiri</label>
+              <input type="text" value={kegiatan.penandatanganSatuNama || ''} onChange={e => setKegiatan({...kegiatan, penandatanganSatuNama: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Nama Lengkap & Gelar" />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Jabatan Tanda Tangan Kanan</label>
+              <input type="text" value={kegiatan.penandatanganDuaJabatan || ''} onChange={e => setKegiatan({...kegiatan, penandatanganDuaJabatan: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Contoh: Sekretaris" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Nama Tanda Tangan Kanan</label>
+              <input type="text" value={kegiatan.penandatanganDuaNama || ''} onChange={e => setKegiatan({...kegiatan, penandatanganDuaNama: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Nama Lengkap & Gelar" />
+            </div>
+          </div>
+          
+          <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 pb-2 border-b border-slate-100 mt-6">Penandatangan Sertifikat (Halaman Belakang)</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Jabatan Tim Instruktur</label>
+              <input type="text" value={kegiatan.penandatanganInstrukturJabatan || ''} onChange={e => setKegiatan({...kegiatan, penandatanganInstrukturJabatan: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Contoh: Instruktur Kaderisasi" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Nama Tim Instruktur</label>
+              <input type="text" value={kegiatan.penandatanganInstrukturNama || ''} onChange={e => setKegiatan({...kegiatan, penandatanganInstrukturNama: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633]" placeholder="Nama Lengkap & Gelar" />
+            </div>
+          </div>
+          
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">Deskripsi Singkat (Publik)</label>
             <textarea value={kegiatan.deskripsi || ''} onChange={e => setKegiatan({...kegiatan, deskripsi: e.target.value})} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-[#006633] min-h-[80px] resize-none" placeholder="Deskripsi akan muncul di halaman pendaftaran..." />

@@ -128,7 +128,8 @@ const defaultConfig: CertificateConfig = {
   materi: defaultMateri,
   signees: [
     { id: 'sign_1', name: 'Sahabat H. Safei, M.Pd.', title: 'Ketua Pimpinan Cabang', type: 'text' },
-    { id: 'sign_2', name: 'Sahabat Ahmad Bukhari, S.Sy.', title: 'Sekretaris Cabang', type: 'text' }
+    { id: 'sign_2', name: 'Sahabat Ahmad Bukhari, S.Sy.', title: 'Sekretaris Cabang', type: 'text' },
+    { id: 'sign_3', name: 'Iman Nurjaman, M.Pd.', title: 'Instruktur Kaderisasi', type: 'text' }
   ],
   penandatanganPklJabatan: 'TIM INSTRUKTUR WILAYAH',
   penandatanganPklNama: 'H. Instruktur PKL, M.Pd.',
@@ -201,7 +202,15 @@ const HiddenCertificateRenderEngine = memo(function HiddenCertificateRenderEngin
           ketuaPelaksana: pKegiatan ? pKegiatan.ketuaPelaksana : undefined,
           jenisKegiatan: pKegiatan ? (pKegiatan.jenisKegiatan || 'PKD') : config.jenisKegiatan,
           penandatanganPklNama: pKegiatan ? (pKegiatan.penandatanganPklNama || config.penandatanganPklNama) : config.penandatanganPklNama,
-          penandatanganPklJabatan: pKegiatan ? (pKegiatan.penandatanganPklJabatan || config.penandatanganPklJabatan) : config.penandatanganPklJabatan
+          penandatanganPklJabatan: pKegiatan ? (pKegiatan.penandatanganPklJabatan || config.penandatanganPklJabatan) : config.penandatanganPklJabatan,
+          penandatanganSatuNama: pKegiatan?.penandatanganSatuNama || config.penandatanganSatuNama,
+          penandatanganSatuJabatan: pKegiatan?.penandatanganSatuJabatan || config.penandatanganSatuJabatan,
+          penandatanganDuaNama: pKegiatan?.penandatanganDuaNama || config.penandatanganDuaNama,
+          penandatanganDuaJabatan: pKegiatan?.penandatanganDuaJabatan || config.penandatanganDuaJabatan,
+          penandatanganInstrukturNama: pKegiatan?.penandatanganInstrukturNama || config.penandatanganInstrukturNama,
+          penandatanganInstrukturJabatan: pKegiatan?.penandatanganInstrukturJabatan || config.penandatanganInstrukturJabatan,
+          penandatanganDirosahNama: pKegiatan?.penandatanganDirosahNama || config.penandatanganDirosahNama,
+          penandatanganDirosahJabatan: pKegiatan?.penandatanganDirosahJabatan || config.penandatanganDirosahJabatan
         };
         return (
           <div key={p.id}>
@@ -275,7 +284,11 @@ export default function App() {
 
   const [config, setConfig] = useState<CertificateConfig>(() => {
     const saved = localStorage.getItem('ansor_config');
-    return saved ? JSON.parse(saved) : defaultConfig;
+    let parsed: CertificateConfig = saved ? JSON.parse(saved) : defaultConfig;
+    if (parsed.signees && parsed.signees.length < 3) {
+      parsed.signees.push({ id: 'sign_3', name: 'Iman Nurjaman, M.Pd.', title: 'Instruktur Kaderisasi', type: 'text' });
+    }
+    return parsed;
   });
 
   const [idCardConfig, setIdCardConfig] = useState<IdCardConfig>(() => {
@@ -2254,9 +2267,91 @@ export default function App() {
                     />
                   </div>
                 </div>
+              </div>
 
-                <div className="text-[10px] text-slate-500 italic bg-white/60 p-2.5 rounded-lg border border-amber-100/60">
-                  💡 Catatan: Pada kegiatan PKD dan Dirosah Ula, sistem tetap menggunakan standar 'Tim Instruktur Cabang / Iman Nurjaman, M.Pd'. Anda juga bisa mengatur nama & jabatan ini secara spesifik per kegiatan saat menambah atau mengedit kegiatan PKL di menu 1. Kegiatan.
+              {/* Custom PKD Page 2 Signee Config */}
+              <div className="p-4 border border-blue-200/80 bg-blue-50/30 rounded-xl space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="bg-blue-100 text-blue-900 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">
+                    Khusus PKD & Dirosah Ula — Penandatangan Halaman 2
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Untuk sertifikat PKD dan Dirosah Ula, atur nama dan jabatan Instruktur Kaderisasi (Tanda tangan halaman belakang) di bawah ini:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Jabatan Penandatangan (Atas)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganInstrukturJabatan ?? ''}
+                      onChange={(e) => setConfig({ ...config, penandatanganInstrukturJabatan: e.target.value })}
+                      placeholder="Contoh: Instruktur Kaderisasi,"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-[#006633] font-black uppercase focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Nama Lengkap Penandatangan (Bawah)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganInstrukturNama ?? ''}
+                      onChange={(e) => setConfig({ ...config, penandatanganInstrukturNama: e.target.value })}
+                      placeholder="Contoh: Iman Nurjaman, M.Pd"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 font-bold focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-500 italic bg-white/60 p-2.5 rounded-lg border border-blue-100/60">
+                  💡 Catatan: Anda juga bisa mengatur nama & jabatan Instruktur secara spesifik per kegiatan saat menambah atau mengedit kegiatan di menu 1. Kegiatan.
+                </div>
+              </div>
+
+              {/* Custom Dirosah Ula Page 2 Signee Config */}
+              <div className="p-4 border border-emerald-200/80 bg-emerald-50/30 rounded-xl space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="bg-emerald-100 text-emerald-900 text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full uppercase">
+                    Khusus Dirosah Ula — Penandatangan Halaman 2
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Untuk sertifikat Dirosah Ula, atur nama dan jabatan Ketua MDS Rijalul Ansor (Tanda tangan halaman belakang) di bawah ini:
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Jabatan Penandatangan (Atas)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganDirosahJabatan ?? ''}
+                      onChange={(e) => setConfig({ ...config, penandatanganDirosahJabatan: e.target.value })}
+                      placeholder="Contoh: Ketua MDS Rijalul Ansor,"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-[#006633] font-black uppercase focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                      Nama Lengkap Penandatangan (Bawah)
+                    </label>
+                    <input
+                      type="text"
+                      value={config.penandatanganDirosahNama ?? ''}
+                      onChange={(e) => setConfig({ ...config, penandatanganDirosahNama: e.target.value })}
+                      placeholder="Contoh: Nama Ketua MDS"
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-slate-800 font-bold focus:outline-none focus:border-[#006633]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
