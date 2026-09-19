@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Kegiatan, Pendaftaran, IdCardConfig } from '../types';
 import { getPendaftaranByKegiatan, markIdCardGenerated } from '../supabaseDatabase';
 import { Printer, Upload, Settings, RefreshCw, AlertCircle, X } from 'lucide-react';
@@ -88,27 +89,25 @@ export default function IdCardPeserta({ kegiatanList, idCardConfig, setIdCardCon
     }, 1000);
   };
 
-  // If we are in print mode, ONLY render the print layout
   if (isPrintMode) {
-    return (
-      <div className="bg-white min-h-screen p-0 m-0 print-only-container">
+    return createPortal(
+      <div className="bg-white print-only-container">
         <style>
           {`
             @media print {
-              body * { visibility: hidden; }
-              .print-only-container, .print-only-container * { visibility: visible; }
+              body > *:not(.print-only-container) { display: none !important; }
               .print-only-container { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
-                width: 200mm; /* Fit for F4 (210mm) minus margins */
-                display: flex; 
-                flex-wrap: wrap; 
-                gap: 2mm; 
-                justify-content: flex-start;
-                align-content: flex-start;
+                position: relative; 
+                width: 100%;
+                display: block; 
                 padding-top: 5mm;
                 padding-left: 2mm;
+              }
+              .id-card-print-wrapper {
+                display: inline-block;
+                vertical-align: top;
+                margin-right: 2mm;
+                margin-bottom: 2mm;
               }
               @page { 
                 size: 215mm 330mm; /* F4 paper size */ 
@@ -139,7 +138,8 @@ export default function IdCardPeserta({ kegiatanList, idCardConfig, setIdCardCon
             </div>
           </div>
         ))}
-      </div>
+      </div>,
+      document.body
     );
   }
 
