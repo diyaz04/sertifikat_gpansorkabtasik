@@ -141,16 +141,22 @@ export default function RekapKelulusan({ kegiatanList, participants, setParticip
         </div>
         
         <div className="flex items-center gap-3">
-          <select
-            className="px-4 py-2 bg-white border border-slate-300 rounded-lg font-medium shadow-sm"
-            value={selectedKegiatanId}
-            onChange={(e) => setSelectedKegiatanId(e.target.value)}
-          >
-            <option value="" disabled>Pilih Kaderisasi...</option>
-            {availableKegiatans.map(k => (
-              <option key={k.id} value={k.id}>{k.judulKegiatan}</option>
-            ))}
-          </select>
+          {availableKegiatans.length === 1 ? (
+            <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg font-bold shadow-sm">
+              {availableKegiatans[0].judulKegiatan}
+            </div>
+          ) : (
+            <select
+              className="px-4 py-2 bg-white border border-slate-300 rounded-lg font-medium shadow-sm"
+              value={selectedKegiatanId}
+              onChange={(e) => setSelectedKegiatanId(e.target.value)}
+            >
+              <option value="" disabled>Pilih Kaderisasi...</option>
+              {availableKegiatans.map(k => (
+                <option key={k.id} value={k.id}>{k.judulKegiatan}</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 

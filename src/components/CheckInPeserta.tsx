@@ -84,17 +84,25 @@ export default function CheckInPeserta({ kegiatanList }: Props) {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         
         <div className="space-y-1 w-full md:w-1/3">
-          <label className="text-xs font-bold text-slate-500 uppercase">Pilih Kaderisasi Hari Ini</label>
-          <select 
-            value={selectedKegiatanId} 
-            onChange={e => setSelectedKegiatanId(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#006633]"
-          >
-            {availableKegiatans.map(k => (
-              <option key={k.id} value={k.id}>{k.judulKegiatan}</option>
-            ))}
-            {availableKegiatans.length === 0 && <option value="">Belum ada kaderisasi aktif</option>}
-          </select>
+          <label className="text-xs font-bold text-slate-500 uppercase">
+            {availableKegiatans.length === 1 ? 'Kaderisasi Aktif' : 'Pilih Kaderisasi Hari Ini'}
+          </label>
+          {availableKegiatans.length === 1 ? (
+            <div className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800">
+              {availableKegiatans[0].judulKegiatan}
+            </div>
+          ) : (
+            <select 
+              value={selectedKegiatanId} 
+              onChange={e => setSelectedKegiatanId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#006633]"
+            >
+              {availableKegiatans.map(k => (
+                <option key={k.id} value={k.id}>{k.judulKegiatan}</option>
+              ))}
+              {availableKegiatans.length === 0 && <option value="">Belum ada kaderisasi aktif</option>}
+            </select>
+          )}
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row gap-6 w-full justify-end items-center">

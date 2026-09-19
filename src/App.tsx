@@ -1555,29 +1555,29 @@ export default function App() {
           
           {activeTab === 'kaderisasi' && (
             <DaftarKaderisasi 
-              kegiatanList={kegiatanList} 
+              kegiatanList={allowedKegiatanList} 
               setKegiatanList={setKegiatanList} 
             />
           )}
-          {activeTab === 'pendaftaran' && <PendaftaranPeserta kegiatanList={kegiatanList} />}
-          {activeTab === 'checkin' && <CheckInPeserta kegiatanList={kegiatanList} />}
+          {activeTab === 'pendaftaran' && <PendaftaranPeserta kegiatanList={allowedKegiatanList} />}
+          {activeTab === 'checkin' && <CheckInPeserta kegiatanList={allowedKegiatanList} />}
           {activeTab === 'idcard' && (
             <IdCardPeserta 
-              kegiatanList={kegiatanList} 
+              kegiatanList={allowedKegiatanList} 
               idCardConfig={idCardConfig} 
               setIdCardConfig={setIdCardConfig} 
             />
           )}
           {activeTab === 'jadwal' && (
             <JadwalMateri 
-              kegiatanList={kegiatanList} 
+              kegiatanList={allowedKegiatanList} 
               setKegiatanList={setKegiatanList} 
             />
           )}
-          {activeTab === 'absensi' && <AbsensiScan kegiatanList={kegiatanList} />}
+          {activeTab === 'absensi' && <AbsensiScan kegiatanList={allowedKegiatanList} />}
           {activeTab === 'rekap' && (
             <RekapKelulusan 
-              kegiatanList={kegiatanList}
+              kegiatanList={allowedKegiatanList}
               participants={participants}
               setParticipants={setParticipants}
               setActiveTab={setActiveTab}
