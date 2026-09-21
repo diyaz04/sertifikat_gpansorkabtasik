@@ -372,6 +372,15 @@ export default function App() {
 
   // Export process loading states
   const [exportProgress, setExportProgress] = useState<string | null>(null);
+
+  // Generate certificate popup state
+  const [generatePopup, setGeneratePopup] = useState<{
+    open: boolean;
+    kegiatanId: string;
+    startSequence: number;
+    pesertaCount: number;
+    lastSequenceInfo: number;
+  } | null>(null);
   const [showNotification, setShowNotification] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [databaseSyncState, setDatabaseSyncState] = useState<{
     loading: boolean;
@@ -1021,10 +1030,10 @@ export default function App() {
     }
   };
 
-  const handleGenerateCertificates = async (kegiatanId = selectedKegiatanId) => {
+  // Opens the generate popup so user can configure starting certificate number
+  const handleGenerateCertificates = (kegiatanId = selectedKegiatanId) => {
     const kegiatan = kegiatanList.find(k => k.id === kegiatanId) || activeKegiatan;
     const pesertaKegiatan = participants.filter(p => p.kegiatanId === kegiatanId);
-    setSelectedKegiatanId(kegiatanId);
 
     if (pesertaKegiatan.length === 0) {
       triggerNotification('error', 'Import atau tambah peserta dulu sebelum generate sertifikat.');
@@ -1039,19 +1048,54 @@ export default function App() {
       return;
     }
 
+    // Calculate the last used certificate sequence across ALL kegiatan
+    const lastSeq = getLastCertificateSequence();
+    // Also check if THIS kegiatan's participants already have sequences assigned
+    const thisKegiatanSeqs = pesertaKegiatan.map(p => extractCertificateSequence(p.number)).filter(n => n > 0);
+    const thisKegiatanFirstSeq = thisKegiatanSeqs.length > 0 ? Math.min(...thisKegiatanSeqs) : 0;
+    // Default: continue from last sequence, or use existing first sequence of this kegiatan if already assigned
+    const suggestedStart = thisKegiatanFirstSeq > 0 ? thisKegiatanFirstSeq : lastSeq + 1;
+
+    setGeneratePopup({
+      open: true,
+      kegiatanId,
+      startSequence: suggestedStart,
+      pesertaCount: pesertaKegiatan.length,
+      lastSequenceInfo: lastSeq,
+    });
+  };
+
+  // Actually execute certificate generation with the user-specified starting number
+  const executeGenerateCertificates = async (kegiatanId: string, startSequence: number) => {
+    setGeneratePopup(null);
+    const kegiatan = kegiatanList.find(k => k.id === kegiatanId) || activeKegiatan;
+    const pesertaKegiatan = participants.filter(p => p.kegiatanId === kegiatanId);
+    setSelectedKegiatanId(kegiatanId);
+
     const generatedAt = new Date().toISOString();
     const nextKegiatanList = kegiatanList.map(k => (
       k.id === kegiatanId ? { ...k, generatedAt } : k
     ));
-    const nextParticipants = participants.map((participant) => (
-      participant.kegiatanId === kegiatanId
-        ? { ...participant, verificationToken: participant.verificationToken || crypto.randomUUID() }
-        : participant
-    ));
+    // Renumber participants with the user-specified starting sequence
+    const nextParticipants = participants.map((participant, _idx) => {
+      if (participant.kegiatanId !== kegiatanId) return participant;
+      const indexInKegiatan = pesertaKegiatan.findIndex(p => p.id === participant.id);
+      const seq = startSequence + indexInKegiatan;
+      return {
+        ...participant,
+        number: buildCertificateNumber(seq, kegiatan.tanggalBerakhir),
+        verificationToken: participant.verificationToken || crypto.randomUUID(),
+      };
+    });
     const issuedParticipants = nextParticipants.filter(p => p.kegiatanId === kegiatanId);
+    const lastAssignedSeq = startSequence + pesertaKegiatan.length - 1;
 
     setKegiatanList(nextKegiatanList);
     setParticipants(nextParticipants);
+    setConfig(prev => ({
+      ...prev,
+      lastCertificateSequence: Math.max(Number(prev.lastCertificateSequence || 0), lastAssignedSeq),
+    }));
     setSelectedIds(new Set(pesertaKegiatan.map(p => p.id)));
     setActiveParticipantId(pesertaKegiatan[0].id);
     setActiveTab('sertifikat');
@@ -1069,7 +1113,7 @@ export default function App() {
             payload: {
               p: {
                 ...participant,
-                number: buildCertificateNumber(extractCertificateSequence(participant.number) || 1, kegiatan.tanggalBerakhir),
+                number: participant.number,
                 date: participant.date || formatIndonesianDate(kegiatan.tanggalBerakhir),
               },
               c: {
@@ -1099,11 +1143,11 @@ export default function App() {
       triggerNotification(
         onlineOk ? 'success' : 'error',
         onlineOk
-          ? `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal dan dikirim ke Supabase.`
+          ? `Sertifikat ${pesertaKegiatan.length} peserta (No. ${startSequence}–${lastAssignedSeq}) tersimpan lokal dan dikirim ke Supabase.`
           : `Sertifikat ${pesertaKegiatan.length} peserta tersimpan lokal, tapi gagal sinkron ke Supabase.`
       );
     } else {
-      triggerNotification('success', `Sertifikat ${pesertaKegiatan.length} peserta tersimpan untuk ${kegiatan.judulKegiatan}.`);
+      triggerNotification('success', `Sertifikat ${pesertaKegiatan.length} peserta (No. ${startSequence}–${lastAssignedSeq}) tersimpan untuk ${kegiatan.judulKegiatan}.`);
     }
 
     if (certificatesIssued) {
@@ -2833,6 +2877,110 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL: GENERATE CERTIFICATE NUMBER CONFIGURATION */}
+      {generatePopup?.open && (() => {
+        const popupKegiatan = kegiatanList.find(k => k.id === generatePopup.kegiatanId) || activeKegiatan;
+        return (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in-0 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="bg-white text-slate-900 px-6 py-5 flex items-center justify-between border-b border-slate-100">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                  Konfigurasi Nomor Sertifikat
+                </h3>
+                <button
+                  onClick={() => setGeneratePopup(null)}
+                  type="button"
+                  className="text-slate-400 hover:text-slate-900 font-bold text-lg cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Info kegiatan */}
+                <div className="bg-[#ebfef4] border border-[#006633]/20 rounded-xl p-4">
+                  <div className="text-[10px] font-black text-[#006633] uppercase tracking-wider mb-1">Kegiatan</div>
+                  <div className="text-sm font-bold text-slate-800">{popupKegiatan.judulKegiatan}</div>
+                  <div className="text-xs text-slate-500 mt-1">{generatePopup.pesertaCount} peserta akan digenerate</div>
+                </div>
+
+                {/* Info nomor terakhir */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Nomor Sertifikat Terakhir</span>
+                  </div>
+                  <div className="text-2xl font-black text-amber-800">
+                    {generatePopup.lastSequenceInfo > 0
+                      ? <>{generatePopup.lastSequenceInfo} <span className="text-sm font-semibold text-amber-600">(dari seluruh kegiatan)</span></>
+                      : <span className="text-base">Belum ada sertifikat sebelumnya</span>
+                    }
+                  </div>
+                </div>
+
+                {/* Input nomor mulai */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Mulai dari Nomor <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={generatePopup.startSequence}
+                    onChange={(e) => setGeneratePopup(prev => prev ? {
+                      ...prev,
+                      startSequence: Math.max(1, Number(e.target.value) || 1)
+                    } : null)}
+                    className="w-full text-lg font-black bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#006633]/20 focus:border-[#006633] text-center"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                    Sertifikat akan dinomori <strong className="text-slate-700">{generatePopup.startSequence}</strong> s/d <strong className="text-slate-700">{generatePopup.startSequence + generatePopup.pesertaCount - 1}</strong>
+                    {' '}→{' '}
+                    <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
+                      {buildCertificateNumber(generatePopup.startSequence, popupKegiatan.tanggalBerakhir)}
+                    </span>
+                  </p>
+                </div>
+
+                {/* Warning if overlapping */}
+                {generatePopup.startSequence <= generatePopup.lastSequenceInfo && generatePopup.lastSequenceInfo > 0 && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start gap-2">
+                    <svg className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <p className="text-xs text-rose-700 font-medium">
+                      Nomor ini sudah terpakai di kegiatan lain! Disarankan mulai dari <strong>{generatePopup.lastSequenceInfo + 1}</strong> agar tidak tumpang tindih.
+                    </p>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setGeneratePopup(null)}
+                    className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-600 transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => executeGenerateCertificates(generatePopup.kegiatanId, generatePopup.startSequence)}
+                    disabled={exportProgress !== null}
+                    className="flex-[2] flex items-center justify-center gap-2 bg-[#006633] hover:bg-[#005229] disabled:bg-slate-300 text-white text-xs font-black uppercase tracking-wide px-5 py-3 rounded-xl transition-all shadow-sm cursor-pointer"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Generate Sertifikat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       </div>
     </div>
