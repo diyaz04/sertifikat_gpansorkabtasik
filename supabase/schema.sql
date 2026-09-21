@@ -114,6 +114,13 @@ create policy "authenticated certificates access" on public.certificates for all
 create policy "public certificate verification" on public.certificates for select to anon using (true);
 create policy "admin can view own role" on public.admin_users for select to authenticated using (user_id = (select auth.uid()));
 
+-- Instruktur (authenticated non-admin) dapat membaca dan mengoperasikan data yang diperlukan
+create policy "authenticated kegiatan read" on public.kegiatan for select to authenticated using (true);
+create policy "authenticated participants read" on public.participants for select to authenticated using (true);
+create policy "authenticated app_state read" on public.app_state for select to authenticated using (true);
+create policy "authenticated certificates read" on public.certificates for select to authenticated using (true);
+create policy "authenticated certificates insert" on public.certificates for insert to authenticated with check (true);
+
 -- FASE 2: Form Pendaftaran Publik
 alter table public.kegiatan add column if not exists status text not null default 'draft';
 alter table public.kegiatan add column if not exists kuota_peserta integer;
@@ -154,6 +161,8 @@ create table if not exists public.absensi_materi (
 alter table public.absensi_materi enable row level security;
 create policy "Allow anon insert absensi" on public.absensi_materi for insert to anon with check (true);
 create policy "Allow anon select absensi" on public.absensi_materi for select to anon using (true);
+create policy "authenticated absensi read" on public.absensi_materi for select to authenticated using (true);
+create policy "authenticated absensi insert" on public.absensi_materi for insert to authenticated with check (true);
 
 
 alter table public.pendaftaran enable row level security;
@@ -161,4 +170,7 @@ drop policy if exists "public insert pendaftaran" on public.pendaftaran;
 drop policy if exists "authenticated pendaftaran access" on public.pendaftaran;
 create policy "public insert pendaftaran" on public.pendaftaran for insert to anon, authenticated with check (true);
 create policy "authenticated pendaftaran access" on public.pendaftaran for all to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+create policy "authenticated pendaftaran read" on public.pendaftaran for select to authenticated using (true);
+create policy "authenticated pendaftaran update" on public.pendaftaran for update to authenticated using (true) with check (true);
 create policy "public read kegiatan" on public.kegiatan for select to anon using (true);
+

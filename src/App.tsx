@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef, memo } from 'react';
 import { Participant, CertificateConfig, Signee, MateriItem, Kegiatan, IssuedCertificate, IdCardConfig, AppUser } from './types';
 import { formatIndonesianDate, formatIndonesianDateRange } from './utils';
 import CertificatePreview, { AnsorLogoSvg } from './components/CertificatePreview';
@@ -396,11 +396,23 @@ export default function App() {
     localStorage.setItem('ansor_config', JSON.stringify(config));
   }, [config]);
 
+  // Recalculate lastCertificateSequence whenever participants change to ensure it's always
+  // at least as high as the highest existing sequence across ALL kegiatan.
   useEffect(() => {
-    if (config.lastCertificateSequence !== undefined) return;
     const highestExisting = Math.max(0, ...participants.map(p => extractCertificateSequence(p.number)));
-    setConfig(prev => ({ ...prev, lastCertificateSequence: highestExisting }));
-  }, [participants, config.lastCertificateSequence]);
+    setConfig(prev => {
+      const current = Number(prev.lastCertificateSequence || 0);
+      // Only update if the computed value is higher (never lower it)
+      if (highestExisting > current) {
+        return { ...prev, lastCertificateSequence: highestExisting };
+      }
+      // If it was undefined/NaN, set it to at least the computed value
+      if (prev.lastCertificateSequence === undefined || !Number.isFinite(current)) {
+        return { ...prev, lastCertificateSequence: highestExisting };
+      }
+      return prev;
+    });
+  }, [participants]);
 
   useEffect(() => {
     localStorage.setItem('ansor_kegiatan_list', JSON.stringify(kegiatanList));
@@ -439,7 +451,11 @@ export default function App() {
   const deferredKegiatanList = useDeferredValue(kegiatanList);
   const deferredActiveKegiatan = useDeferredValue(activeKegiatan);
   const deferredConfig = useDeferredValue(config);
-  const getLastCertificateSequence = () => Math.max(
+  // Use a ref so that any callback (including stale useCallback closures) always reads fresh state
+  const lastCertSeqRef = useRef(0);
+  const getLastCertificateSequence = useCallback(() => lastCertSeqRef.current, []);
+  // Keep the ref updated every render
+  lastCertSeqRef.current = Math.max(
     Number(config.lastCertificateSequence || 0),
     ...participants.map(participant => extractCertificateSequence(participant.number)),
   );
@@ -535,9 +551,17 @@ export default function App() {
 
       setKegiatanList(payload.kegiatanList.length > 0 ? payload.kegiatanList : defaultKegiatan);
       setParticipants(payload.participants);
+      // Recalculate lastCertificateSequence from actual participant data to prevent
+      // certificate numbers from restarting when the saved config didn't persist this field
+      const restoredHighestSeq = Math.max(
+        0,
+        Number(payload.config.lastCertificateSequence || 0),
+        ...payload.participants.map((p: Participant) => extractCertificateSequence(p.number)),
+      );
       setConfig({
         ...defaultConfig,
         ...payload.config,
+        lastCertificateSequence: restoredHighestSeq,
         materi: payload.config.materi || defaultMateri,
         signees: payload.config.signees?.length ? payload.config.signees : defaultConfig.signees,
       });
@@ -698,8 +722,11 @@ export default function App() {
   };
 
   // Google Sheets import handler
+  // Uses getLastCertificateSequence() which reads from ref (always fresh, never stale)
   const handleImportComplete = useCallback((imported: Participant[]) => {
-    const firstSequence = getLastCertificateSequence() + 1;
+    const freshLastSeq = getLastCertificateSequence();
+    const firstSequence = freshLastSeq + 1;
+    console.log('[Import] Last cert sequence:', freshLastSeq, '→ starting from', firstSequence);
     const importedWithKegId = imported.map((p, index) => ({
       ...p,
       kegiatanId: selectedKegiatanId,
@@ -711,9 +738,10 @@ export default function App() {
       return [...prev, ...importedWithKegId];
     });
     if (importedWithKegId.length > 0) {
+      const newLastSeq = firstSequence + importedWithKegId.length - 1;
       setConfig(prev => ({
         ...prev,
-        lastCertificateSequence: firstSequence + importedWithKegId.length - 1,
+        lastCertificateSequence: Math.max(Number(prev.lastCertificateSequence || 0), newLastSeq),
       }));
     }
     if (importedWithKegId.length > 0) {
@@ -721,7 +749,7 @@ export default function App() {
     }
     markActiveKegiatanDraft();
     triggerNotification('success', `Berhasil mengimpor ${imported.length} kader ke kegiatan "${activeKegiatan.judulKegiatan}"`);
-  }, [selectedKegiatanId, activeKegiatan, config.dateText, config.lastCertificateSequence, participants, kegiatanList]);
+  }, [selectedKegiatanId, activeKegiatan, config.dateText, getLastCertificateSequence]);
 
   // Kegiatan Form Submit (Manual Create / Edit)
   const handleKegiatanFormSubmit = (e: React.FormEvent) => {
@@ -1041,7 +1069,7 @@ export default function App() {
             payload: {
               p: {
                 ...participant,
-                number: buildCertificateNumber(Number((participant.number || '1').match(/\d+/)?.[0] || 1), kegiatan.tanggalBerakhir),
+                number: buildCertificateNumber(extractCertificateSequence(participant.number) || 1, kegiatan.tanggalBerakhir),
                 date: participant.date || formatIndonesianDate(kegiatan.tanggalBerakhir),
               },
               c: {
@@ -1326,7 +1354,7 @@ export default function App() {
         
         {/* MENU LIST (GROUPED) */}
         <nav className="flex-1 p-4 space-y-6 overflow-y-auto pb-24 lg:pb-4 scrollbar-hide">
-          {Object.entries(groupedTabs).map(([category, tabs]) => (
+          {(Object.entries(groupedTabs) as [string, typeof availableTabsList][]).map(([category, tabs]) => (
             <div key={category} className="space-y-2">
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 mb-1">
                 {category}
